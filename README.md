@@ -2,11 +2,9 @@
 
 This repository contains the code of Intel(R) SAT Solver (IntelSAT).
 
-Compilation requires g++ version 10.1.0 or higher to compile. Use make as follows:
+Compilation requires g++ version 10.1.0 or higher. 
 
-"make rs" for a statically linked release version.
-"make d"  for a debug version (no optimizations).
-"make"    for the standard version (optimized, but with debug information and assertions active)
+To compile IntelSAT executable in Release mode, run make as follows: "make rs". To compile IntelSAT library in Release mode, run make as follows: "make libr". For other compilation options, please refer to Makefile.
 
 When using IntelSAT, please refer to the following paper:
 

@@ -7,6 +7,7 @@
 
 PWD        = $(shell pwd)
 EXEC      ?= $(notdir $(PWD))
+LIB       ?= $(notdir $(PWD))
 
 CSRCS      = $(wildcard $(PWD)/*.cc) 
 DSRCS      = $(foreach dir, $(DEPDIR), $(filter-out $(MROOT)/$(dir)/Main.cc, $(wildcard $(MROOT)/$(dir)/*.cc)))
@@ -68,17 +69,17 @@ lib$(LIB)_release.a:	$(filter-out */Main.or, $(RCOBJS))
 
 ## Build rule
 %.o %.op %.od %.or:	%.cc
-	@echo Compiling: $(subst $(MROOT)/,,$@)
+	@echo Compiling: $@
 	@$(CXX) $(CFLAGS) -c -o $@ $<
 
 ## Linking rules (standard/profile/debug/release)
 $(EXEC) $(EXEC)_profile $(EXEC)_debug $(EXEC)_release $(EXEC)_static:
-	@echo Linking: "$@ ( $(foreach f,$^,$(subst $(MROOT)/,,$f)) )"
+	@echo Linking: "$@ ( $(foreach f,$^,$f) )"
 	@$(CXX) $^ $(LFLAGS) -o $@
 
 ## Library rules (standard/profile/debug/release)
 lib$(LIB)_standard.a lib$(LIB)_profile.a lib$(LIB)_release.a lib$(LIB)_debug.a:
-	@echo Making library: "$@ ( $(foreach f,$^,$(subst $(MROOT)/,,$f)) )"
+	@echo Making library: "$@ ( $(foreach f,$^,$f) )"
 	@$(AR) -rcsv $@ $^
 
 ## Library Soft Link rule:
@@ -91,7 +92,7 @@ allclean: clean
 	
 	@rm -f ../simp/*.o ../simp/*.or ../simp/*.od  ../core/*.o ../core/*.or ../core/*.od
 clean:
-	rm -f $(EXEC) $(EXEC)_profile $(EXEC)_debug $(EXEC)_release $(EXEC)_static \
+	rm -f $(EXEC) $(EXEC)_profile $(EXEC)_debug $(EXEC)_release $(EXEC)_static lib$(LIB)_*.a lib$(LIB)_profile.a lib$(LIB)_debug.a lib$(LIB)_release.a lib$(LIB).a\
 	  $(COBJS) $(PCOBJS) $(DCOBJS) $(RCOBJS) *.core depend.mk 
 
 ## Make dependencies
