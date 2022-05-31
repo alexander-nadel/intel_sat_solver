@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -201,8 +201,16 @@ void CTopi::ClsDeletionInit()
 		m_ClsDelInfo.m_ConfsPrev = 0;
 		m_ClsDelInfo.m_TriggerNext = (uint64_t)m_ParamClsDelLowTriggerInit;
 		m_ClsDelInfo.m_TriggerInc = (uint64_t)m_ParamClsDelLowTriggerInc;
-		m_ClsDelInfo.m_TriggerMult = m_ParamClsDelLowTriggerMult;
-		m_ClsDelInfo.m_TriggerMax = (uint64_t)m_ParamClsDelLowTriggerMax;
+		m_ClsDelInfo.m_TriggerMult = m_ParamClsDelS1LowTriggerMult;
+		if (m_ParamClsDelStrategy == 1)
+		{
+			m_ClsDelInfo.m_TriggerMax = (uint64_t)m_ParamClsDelS1LowTriggerMax;
+		}
+		else
+		{
+			m_ClsDelInfo.m_CurrChange = (uint64_t)m_ParamClsDelLowTriggerInit;
+		}
+		
 		m_ClsDelInfo.m_FracToDelete = m_ParamClsDelLowFracToDelete;		
 		m_ClsDelInfo.m_GlueNeverDelete = (uint8_t)m_ParamClsDelGlueNeverDelete;
 		m_ClsDelInfo.m_Clusters = (uint8_t)m_ParamClsDelGlueClusters;
@@ -214,7 +222,7 @@ void CTopi::ClsDeletionInit()
 
 void CTopi::ClsDeletionDecayActivity()
 {
-	if (m_ParamClsDelStrategy)
+	if (m_ParamClsDelStrategy > 0)
 	{
 		m_ClsDelOneTierActivityIncrease *= (1 / m_ParamClsLowDelActivityDecay);
 	}
@@ -222,7 +230,7 @@ void CTopi::ClsDeletionDecayActivity()
 
 void CTopi::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
 {
-	if (m_ParamClsDelStrategy)
+	if (m_ParamClsDelStrategy > 0)
 	{
 		const auto glue = ClsGetGlue(clsInd);
 		const bool glueDecreased = glue < prevGlue;
@@ -255,7 +263,7 @@ void CTopi::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
 
 void CTopi::DeleteClausesIfRequired()
 {
-	if (!m_ParamClsDelStrategy || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT || 
+	if (m_ParamClsDelStrategy == 0 || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT || 
 		(ClsDeletionTrigger() < m_ClsDelInfo.m_TriggerNext) || (m_ParamClsDelDeleteOnlyAssumpDecLevel && m_DecLevel > m_DecLevelOfLastAssignedAssumption))
 	{
 		return;
@@ -379,24 +387,53 @@ void CTopi::DeleteClausesIfRequired()
 		});
 	}
 	
-	
-	m_ClsDelInfo.m_TriggerNext = ClsDeletionTrigger() + m_ClsDelInfo.m_TriggerInc;
-	const double nextTriggerIncD = (double)m_ClsDelInfo.m_TriggerInc * m_ClsDelInfo.m_TriggerMult;
-	if (nextTriggerIncD >= (double)m_ClsDelInfo.m_TriggerMax)
-	{
-		m_ClsDelInfo.m_TriggerInc = m_ClsDelInfo.m_TriggerMax;
-	}
-	else
-	{
-		m_ClsDelInfo.m_TriggerInc = (uint64_t)nextTriggerIncD;
-	}	
-
-	// Now mark bad learnt clauses as deleted
 	size_t iLastExcl = (decltype(iLastExcl))((float)(ClsDeletionTrigger() - undeletableButNotTouched) * m_ClsDelInfo.m_FracToDelete);
 	if (iLastExcl > learnts.size())
 	{
 		iLastExcl = learnts.size();
 	}
+
+	if (m_ParamClsDelStrategy == 1)
+	{
+		m_ClsDelInfo.m_TriggerNext = ClsDeletionTrigger() + m_ClsDelInfo.m_TriggerInc;
+		const double nextTriggerIncD = (double)m_ClsDelInfo.m_TriggerInc * m_ClsDelInfo.m_TriggerMult;
+		if (nextTriggerIncD >= (double)m_ClsDelInfo.m_TriggerMax)
+		{
+			m_ClsDelInfo.m_TriggerInc = m_ClsDelInfo.m_TriggerMax;
+		}
+		else
+		{
+			m_ClsDelInfo.m_TriggerInc = (uint64_t)nextTriggerIncD;
+		}
+	}
+	else
+	{
+		const float nextChange = static_cast<float>((m_Stat.m_Conflicts / m_ClsDelInfo.m_CurrChange) + 1.0);
+		m_ClsDelInfo.m_CurrChange += m_ClsDelInfo.m_TriggerInc;
+		if (ClsGetGlue(learnts[iLastExcl >> 1]) <= m_ParamClsDelS2LowGlue)
+		{
+			m_ClsDelInfo.m_CurrChange += m_ParamClsDelS2LowMediumIncValue;
+		}
+
+		if (ClsGetGlue(learnts.back()) <= m_ParamClsDelS2MediumGlue)
+		{
+			m_ClsDelInfo.m_CurrChange += m_ParamClsDelS2LowMediumIncValue;
+		}
+
+		const double triggerNext = (double)nextChange * (double)m_ClsDelInfo.m_CurrChange;
+		if (unlikely(triggerNext > (double)numeric_limits<decltype(m_ClsDelInfo.m_TriggerNext)>::max()))
+		{
+			m_ClsDelInfo.m_TriggerNext = numeric_limits<decltype(m_ClsDelInfo.m_TriggerNext)>::max();
+		}
+		else
+		{
+			m_ClsDelInfo.m_TriggerNext = (uint64_t)triggerNext;
+		}
+	}
+	
+
+	// Now mark bad learnt clauses as deleted
+	
 	for (size_t i = 0; i < iLastExcl; ++i)
 	{
 		const TUInd clsInd = learnts[i];
@@ -1019,6 +1056,82 @@ bool CTopi::DebugAssertWaste()
 	return true;
 }
 
+void CTopi::CompressWLs()
+{
+	// Save aside the two initial watch entries for every literal l
+	// and place log2(allocated) && l to be able to, respectively: (1) Skip to the next chunk during compression; 
+	// (2) Point from the watches to their updated location in the watch-buffer
+
+	CDynArray<array<TULit, 2>> firstWLEntriesPerLit(GetNextLit(), 0);
+	if (unlikely(IsUnrecoverable())) return;
+
+	for (TULit l = GetFirstLit(); l < GetNextLit(); ++l)
+	{
+		TWatchInfo& wi = m_Watches[l];
+		const auto usedEntries = wi.GetUsedEntries();
+
+		if (m_ParamCompressAllocatedPerWatch && wi.m_AllocatedEntries > 0 && usedEntries == 0)
+		{
+			MarkWatchBufferChunkDeleted(wi);
+			wi.m_AllocatedEntries = 0;
+		}
+
+		if (wi.m_AllocatedEntries > 0)
+		{
+			assert(has_single_bit(wi.m_AllocatedEntries));
+			assert(wi.m_AllocatedEntries >= TWatchInfo::BinsInLongBitCeil);
+
+			if (m_ParamCompressAllocatedPerWatch)
+			{
+				const TUInd allocatedEntriesBefore = wi.m_AllocatedEntries;
+				wi.m_AllocatedEntries = bit_ceil(usedEntries);
+				assert(wi.m_AllocatedEntries != 0);
+				if (wi.m_AllocatedEntries < TWatchInfo::BinsInLongBitCeil)
+				{
+					wi.m_AllocatedEntries = TWatchInfo::BinsInLongBitCeil;
+				}
+
+				// Marking deleted regions
+				TUInd bitFloor = BadClsInd;
+				for (auto [nextEntry, remainingEntriesToMark] = make_tuple(wi.m_WBInd + wi.m_AllocatedEntries, allocatedEntriesBefore - wi.m_AllocatedEntries); remainingEntriesToMark != 0; remainingEntriesToMark -= bitFloor, nextEntry = WLEnd(nextEntry))
+				{
+					bitFloor = bit_floor((TUInd)remainingEntriesToMark);
+					MarkWatchBufferChunkDeletedOrByLiteral(nextEntry, bitFloor);
+				}
+			}
+
+			firstWLEntriesPerLit[l][0] = m_W[wi.m_WBInd];
+			firstWLEntriesPerLit[l][1] = m_W[wi.m_WBInd + 1];
+
+			MarkWatchBufferChunkDeletedOrByLiteral(wi.m_WBInd, wi.m_AllocatedEntries, l);
+		}
+	}
+
+	// Compress the watch buffer
+	m_W.Compress(LitsInPage, m_WNext, [&](TUInd wlInd)
+	{
+		return WLChunkDeleted(wlInd);
+	}, [&](TUInd wlInd)
+	{
+		return WLEnd(wlInd);
+	}, [&](TUInd oldWlInd, TUInd newWlInd)
+	{
+		assert(newWlInd >= LitsInPage);
+		const TULit l = m_W[oldWlInd + 1];
+		m_W[oldWlInd] = firstWLEntriesPerLit[l][0];
+		m_W[oldWlInd + 1] = firstWLEntriesPerLit[l][1];
+
+		m_Watches[l].m_WBInd = newWlInd;
+	});
+
+	if (m_ParamReduceBuffersSizeAfterCompression && m_W.cap() > (size_t)((double)m_WNext * m_ParamMultWatches))
+	{
+		m_W.reserve_exactly((size_t)((double)m_WNext * m_ParamMultWatches));
+		if (unlikely(IsUnrecoverable())) return;
+	}
+
+}
+
 void CTopi::CompressBuffersIfRequired()
 {
 	if ((double)m_BWasted / (double)m_BNext <= m_ParamWastedFractionThrToDelete || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)
@@ -1111,77 +1224,7 @@ void CTopi::CompressBuffersIfRequired()
 		AddLongWatchLocal(true, clsInd);
 	}
 
-	// Save aside the two initial watch entries for every literal l
-	// and place log2(allocated) && l to be able to, respectively: (1) Skip to the next chunk during compression; 
-	// (2) Point from the watches to their updated location in the watch-buffer
-
-	CDynArray<array<TULit, 2>> firstWLEntriesPerLit(GetNextLit(), 0);
-	if (unlikely(IsUnrecoverable())) return;
-
-	for (TULit l = GetFirstLit(); l < GetNextLit(); ++l)
-	{
-		TWatchInfo& wi = m_Watches[l];
-		const auto usedEntries = wi.GetUsedEntries();
-
-		if (m_ParamCompressAllocatedPerWatch && wi.m_AllocatedEntries > 0 && usedEntries == 0)
-		{
-			MarkWatchBufferChunkDeleted(wi);
-			wi.m_AllocatedEntries = 0;
-		}
-
-		if (wi.m_AllocatedEntries > 0)
-		{
-			assert(has_single_bit(wi.m_AllocatedEntries));
-			assert(wi.m_AllocatedEntries >= TWatchInfo::BinsInLongBitCeil);
-
-			if (m_ParamCompressAllocatedPerWatch)
-			{
-				const TUInd allocatedEntriesBefore = wi.m_AllocatedEntries;
-				wi.m_AllocatedEntries = bit_ceil(usedEntries);
-				assert(wi.m_AllocatedEntries != 0);
-				if (wi.m_AllocatedEntries < TWatchInfo::BinsInLongBitCeil)
-				{
-					wi.m_AllocatedEntries = TWatchInfo::BinsInLongBitCeil;
-				}
-
-				// Marking deleted regions
-				TUInd bitFloor = BadClsInd;
-				for (auto [nextEntry, remainingEntriesToMark] = make_tuple(wi.m_WBInd + wi.m_AllocatedEntries, allocatedEntriesBefore - wi.m_AllocatedEntries); remainingEntriesToMark != 0; remainingEntriesToMark -= bitFloor, nextEntry = WLEnd(nextEntry))
-				{
-					bitFloor = bit_floor((TUInd)remainingEntriesToMark);
-					MarkWatchBufferChunkDeletedOrByLiteral(nextEntry, bitFloor);
-				}
-			}
-
-			firstWLEntriesPerLit[l][0] = m_W[wi.m_WBInd];
-			firstWLEntriesPerLit[l][1] = m_W[wi.m_WBInd + 1];
-
-			MarkWatchBufferChunkDeletedOrByLiteral(wi.m_WBInd, wi.m_AllocatedEntries, l);
-		}
-	}
-
-	// Compress the watch buffer
-	m_W.Compress(LitsInPage, m_WNext, [&](TUInd wlInd)
-	{
-		return WLChunkDeleted(wlInd);
-	}, [&](TUInd wlInd)
-	{
-		return WLEnd(wlInd);
-	}, [&](TUInd oldWlInd, TUInd newWlInd)
-	{
-		assert(newWlInd >= LitsInPage);
-		const TULit l = m_W[oldWlInd + 1];
-		m_W[oldWlInd] = firstWLEntriesPerLit[l][0];
-		m_W[oldWlInd + 1] = firstWLEntriesPerLit[l][1];
-
-		m_Watches[l].m_WBInd = newWlInd;
-	});
-
-	if (m_ParamReduceBuffersSizeAfterCompression && m_W.cap() > (size_t)((double)m_WNext * m_ParamMultWatches))
-	{
-		m_W.reserve_exactly((size_t)((double)m_WNext * m_ParamMultWatches));
-		if (unlikely(IsUnrecoverable())) return;
-	}
+	CompressWLs();
 
 	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));

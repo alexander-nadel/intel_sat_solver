@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #pragma once
@@ -81,7 +81,7 @@ namespace Topor
 		// To add a parameter, it suffices to declare it below, c'est tout!
 		CTopiParams m_Params;		
 		// The following semantics would have been better, 
-		// but double template parameters are not supported even by gcc 10.2 (although the support is there in gcc trunc as of Jan., 2021)
+		// but double template parameters are not supported even by gcc 10.2
 		// CTopiParam template class semantics: <type, initVal, minVal, maxVal>, where:
 		//		type must be an arithmetic type, where a floating-point type must fit into a double, and an integer-type must fit into half-a-double
 		//		minVal <= initVal <= maxVal
@@ -103,38 +103,43 @@ namespace Topor
 		CTopiParam<uint8_t> m_ParamInitPolarityStrat = { m_Params, "/decision/polarity/init_strategy", "The initial polarity for a new variable: 0: negative; 1: positive; 2: random",  {1, 1, 1, 1, 1, 2, 1, 1}, 0, 2 };
 		CTopiParam<uint8_t> m_ParamPolarityStrat = { m_Params, "/decision/polarity/strategy", "How to set the polarity for a non-forced variable: 0: phase saving; 1: random", 0, 0, 1 };
 		CTopiParam<double> m_ParamVarActivityInc = { m_Params, "/decision/vsids/var_activity_inc", "Variable activity bumping factor's initial value: m_PosScore[v].m_Score += m_VarActivityInc is carried out for every variable visited during a conflict (hard-coded to 1.0 in Glucose-based solvers)", {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8}, 0.0 };
-		CTopiParam<double> m_ParamVarActivityIncDecay = { m_Params, "/decision/vsids/var_activity_inc_decay", "After each conflict, the variable activity bumping factor is increased by multiplication by 1/m_ParamVarActivityIncDecay (the initial value is provided in the parameter):  m_ParamVarActivityInc *= (1 / m_ParamVarActivityIncDecay), where it's 0.8 in Glucose-based solvers and 0.95 in Minisat", {0.95, 0.8, 0.8, 0.8, 0.8, 0.95, 0.8, 0.95}, numeric_limits<double>::epsilon(), 1.0 };
-		CTopiParam<bool> m_ParamVarActivityIncDecayReinitN = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_n", "Re-initialize /decision/vsids/var_activity_inc_decay before normal incremental Solve?", {true, false, false, false, false, true, false, true} };
-		CTopiParam<bool> m_ParamVarActivityIncDecayReinitS = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_s", "Re-initialize /decision/vsids/var_activity_inc_decay before short incremental Solve?", false };
+		CTopiParam<double> m_ParamVarActivityIncDecay = { m_Params, "/decision/vsids/var_activity_inc_decay", "After each conflict, the variable activity bumping factor is increased by multiplication by 1/m_ParamVarActivityIncDecay (the initial value is provided in the parameter):  m_ParamVarActivityInc *= (1 / m_ParamVarActivityIncDecay), where it's 0.8 in Glucose-based solvers and 0.95 in Minisat", {0.95, 0.8, 0.8, 0.8, 0.8, 0.925, 0.8, 0.95}, numeric_limits<double>::epsilon(), 1.0 };
+		CTopiParam<bool> m_ParamVarActivityIncDecayReinitN = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_n", "Re-initialize /decision/vsids/var_activity_inc_decay before normal incremental Solve?", {true, false, false, false, false, false, false, true} };
+		CTopiParam<bool> m_ParamVarActivityIncDecayReinitS = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_s", "Re-initialize /decision/vsids/var_activity_inc_decay before short incremental Solve?", {false, false, false, false, false, true, false, false} };
 		CTopiParam<uint32_t> m_ParamVarActivityIncDecayStopReinitSInv = { m_Params, "/decision/vsids/var_activity_inc_decay_stop_reinit_s_inv", "The first short incremental invocation to stop re-initializing /decision/vsids/var_activity_inc_decay before short incremental Solve (0: never stop; relevant only if /decision/vsids/var_activity_inc_decay_reinit_s=1)", 0 };
 		CTopiParam<uint32_t> m_ParamVarActivityIncDecayStopReinitRestart = { m_Params, "/decision/vsids/var_activity_inc_decay_stop_reinit_restart", "The first restart to stop re-initializing /decision/vsids/var_activity_inc_decay before short incremental Solve (0: never stop; relevant only if /decision/vsids/var_activity_inc_decay_reinit_s=1)", 0 };
 		CTopiParam<uint32_t> m_ParamVarActivityIncDecayStopReinitConflict = { m_Params, "/decision/vsids/var_activity_inc_decay_stop_reinit_conflict", "The first conflict to stop re-initializing /decision/vsids/var_activity_inc_decay before short incremental Solve (0: never stop; relevant only if /decision/vsids/var_activity_inc_decay_reinit_s=1)", 0 };
 		CTopiParam<double> m_ParamVarActivityIncDecayStopReinitTime = { m_Params, "/decision/vsids/var_activity_inc_decay_stop_reinit_time", "The time in sec. to stop re-initializing /decision/vsids/var_activity_inc_decay before short incremental Solve (0.0: never stop; relevant only if /decision/vsids/var_activity_inc_decay_reinit_s=1)", 0.0 };
-		CTopiParam<double> m_ParamVarActivityIncDecayReinitVal = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_val", "For /decision/vsids/var_activity_inc_decay_reinit_each_solve=1: the value to re-initialize /decision/vsids/var_activity_inc_decay before each Solve", 0.8, numeric_limits<double>::epsilon(), 1.0 };
-		CTopiParam<double> m_ParamVarDecayInc = { m_Params, "/decision/vsids/var_decay_inc", "The increment value for var_activity_inc_decay each var_decay_update_conf_rate conflicts:  m_ParamVarDecay += m_ParamVarDecayInc (hard-coded to 0.01 in Glucose-based solvers)", 0.01, 0, 1.0 };
-		CTopiParam<double> m_ParamVarDecayMax = { m_Params, "/decision/vsids/var_decay_max", "The maximal value for var_activity_inc_decay", {0.99, 0.95, 0.9, 0.95, 0.95, 0.99, 0.95, 0.99}, numeric_limits<double>::epsilon(), 1.0 };
+		CTopiParam<double> m_ParamVarActivityIncDecayReinitVal = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_val", "For /decision/vsids/var_activity_inc_decay_reinit_each_solve=1: the value to re-initialize /decision/vsids/var_activity_inc_decay before each Solve", {0.8, 0.8, 0.8, 0.8, 0.8, 0.925, 0.8, 0.8}, numeric_limits<double>::epsilon(), 1.0 };
+		CTopiParam<double> m_ParamVarDecayInc = { m_Params, "/decision/vsids/var_decay_inc", "The increment value for var_activity_inc_decay each var_decay_update_conf_rate conflicts:  m_ParamVarDecay += m_ParamVarDecayInc (hard-coded to 0.01 in Glucose-based solvers)", {0.01, 0.01, 0.01, 0.01, 0.01, 0.04, 0.01, 0.01}, 0, 1.0 };
+		CTopiParam<double> m_ParamVarDecayIncAi = { m_Params, "/decision/vsids/var_decay_inc_ai", "After initial: the increment value for var_activity_inc_decay each var_decay_update_conf_rate conflicts:  m_ParamVarDecay += m_ParamVarDecayInc (hard-coded to 0.01 in Glucose-based solvers)", 0.01, 0, 1.0 };
+		CTopiParam<double> m_ParamVarDecayIncS = { m_Params, "/decision/vsids/var_decay_inc_s", "Short incremental: The increment value for var_activity_inc_decay each var_decay_update_conf_rate conflicts:  m_ParamVarDecay += m_ParamVarDecayInc (hard-coded to 0.01 in Glucose-based solvers)", {0.01, 0.01, 0.01, 0.01, 0.01, 0.0025, 0.01, 0.01}, 0, 1.0 };
+		CTopiParam<double> m_ParamVarDecayMax = { m_Params, "/decision/vsids/var_decay_max", "The maximal value for var_activity_inc_decay", {0.99, 0.95, 0.9, 0.95, 0.95, 0.98, 0.95, 0.99}, numeric_limits<double>::epsilon(), 1.0 };
+		CTopiParam<double> m_ParamVarDecayMaxAi = { m_Params, "/decision/vsids/var_decay_max_ai", "After initial: The maximal value for var_activity_inc_decay", {0.99, 0.95, 0.9, 0.95, 0.95, 0.99, 0.95, 0.99}, numeric_limits<double>::epsilon(), 1.0 };
+		CTopiParam<double> m_ParamVarDecayMaxS = { m_Params, "/decision/vsids/var_decay_max_s", "Short incremental: The maximal value for var_activity_inc_decay", {0.99, 0.95, 0.9, 0.95, 0.95, 0.98, 0.95, 0.99}, numeric_limits<double>::epsilon(), 1.0 };
 		CTopiParam<uint32_t> m_ParamVarDecayUpdateConfRate = { m_Params, "/decision/vsids/var_decay_update_conf_rate", "The rate in conflicts of var_decay's update (5000 in Glucose-based solvers)", 5000, 1 };
 		inline bool IsVsidsInitOrderParam(const string& paramName) const { return paramName == "/decision/vsids/init_order"; }
 		CTopiParam<bool> m_ParamVsidsInitOrder = { m_Params, "/decision/vsids/init_order", "The order of inserting into the VSIDS heap (0: bigger indices first; 1: smaller indices first)", {false, true, false, true, true, false, true, false} };
+		CTopiParam<bool> m_ParamVsidsInitOrderAi = { m_Params, "/decision/vsids/init_order_ai", "After initial call: the order of inserting into the VSIDS heap (0: bigger indices first; 1: smaller indices first)", {false, true, false, true, true, false, true, true} };
 		CTopiParam<bool> m_ParamVarActivityGlueUpdate = { m_Params, "/decision/vsids/var_activity_glue_update", "Do we increase the VSIDS score for every last-level variable, visited during a conflict, whose parent is a learnt clause with LBD score lower than that of the newly learnt clause?", {true, true, true, false, true, true, false, false} };
 		CTopiParam<bool> m_ParamVarActivityUseMapleLevelBreaker = { m_Params, "/decision/vsids/var_activity_use_maple_level_breaker", "Maple (MapleLCMDistChronoBT-f2trc-s) multiplies the variable activity bumping factor by 1.5 for variables, whose dec. level is higher-than-or-equal than 2nd highest-1 and by 0.5 for other variables; use it?", {false, false, false, true, true, false, true, false} };
 		CTopiParam<bool> m_ParamVarActivityUseMapleLevelBreakerAi = { m_Params, "/decision/vsids/var_activity_use_maple_level_breaker_ai", "After initial call: Maple (MapleLCMDistChronoBT-f2trc-s) multiplies the variable activity bumping factor by 1.5 for variables, whose dec. level is higher-than-or-equal than 2nd highest-1 and by 0.5 for other variables; use it?", {false, false, false, true, true, false, false, false} };
 		CTopiParam<uint32_t> m_ParamVarActivityMapleLevelBreakerDecrease = { m_Params, "/decision/vsids/var_activity_maple_level_breaker_decrease", "If var_activity_use_maple_level_breaker is on, this number is the decrease in the 2nd highest level, so that if the variable is higher-than-or-equal, its bump is more significant", {1, 1, 1, 1, 0, 1, 1, 1} };
-		
+
 		CTopiParam<uint8_t> m_ParamInitClssBoostScoreStrat = { m_Params, "/decision/init_clss_boost/strat", "Initial query: variable score boost strategy for user clauses -- 0: none; 1: no clause-size, user-order; 2: clause-size-aware, user-order; 3: no clause-size, reverse-user-order; 4: clause-size-aware, reverse-user-order", {2, 0, 0, 0, 0, 0, 4, 2}, 0, 4 };
-		CTopiParam<uint8_t> m_ParamInitClssBoostScoreStratAfterInit = { m_Params, "/decision/init_clss_boost/strat_after_init", "After initial query: variable score boost strategy for user clauses -- 0: none; 1: no clause-size, user-order; 2: clause-size-aware, user-order; 3: no clause-size, reverse-user-order; 4: clause-size-aware, reverse-user-order", {1, 0, 0, 0, 0, 0, 0, 1}, 0, 4 };
-		
+		CTopiParam<uint8_t> m_ParamInitClssBoostScoreStratAfterInit = { m_Params, "/decision/init_clss_boost/strat_after_init", "After initial query: variable score boost strategy for user clauses -- 0: none; 1: no clause-size, user-order; 2: clause-size-aware, user-order; 3: no clause-size, reverse-user-order; 4: clause-size-aware, reverse-user-order", {1, 0, 0, 0, 0, 4, 0, 1}, 0, 4 };
+
 		CTopiParam<double> m_ParamInitClssBoostMultHighest = { m_Params, "/decision/init_clss_boost/mult_highest", "Variable score boost for initial clauses: highest mult value", {10., 10., 10., 10., 10., 10., 10., 5.} };
 		CTopiParam<double> m_ParamInitClssBoostMultLowest = { m_Params, "/decision/init_clss_boost/mult_lowest", "Variable score boost for initial clauses: lowest mult value", 1. };
 		CTopiParam<double> m_ParamInitClssBoostMultDelta = { m_Params, "/decision/init_clss_boost/mult_delta", "Variable score boost for initial clauses: delta mult value",  {0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.01} };
 
 		// Parameters: backtracking
-		CTopiParam<TUV> m_ParamChronoBtIfHigherInit = { m_Params, "/backtracking/chrono_bt_if_higher_init", "Initial query: backtrack chronologically, if the decision level difference is higher than the parameter", {100, numeric_limits<TUV>::max(), 50, 100, 100, 0, 100, 0} };
-		CTopiParam<TUV> m_ParamChronoBtIfHigherN = { m_Params, "/backtracking/chrono_bt_if_higher_n", "Normal (non-short) incremental query: Backtrack chronologically, if the decision level difference is higher than the parameter", {0, numeric_limits<TUV>::max(), 50, 100, 100, 0, 100, 0} };
-		CTopiParam<TUV> m_ParamChronoBtIfHigherS = { m_Params, "/backtracking/chrono_bt_if_higher_s", "Short incremental query: Backtrack chronologically, if the decision level difference is higher than the parameter", {100, numeric_limits<TUV>::max(), 50, 100, 100, 0, 100, 100} };
-		
+		CTopiParam<TUV> m_ParamChronoBtIfHigherInit = { m_Params, "/backtracking/chrono_bt_if_higher_init", "Initial query: backtrack chronologically, if the decision level difference is higher than the parameter", {100, numeric_limits<TUV>::max(), 50, 100, 100, 50, 100, 0} };
+		CTopiParam<TUV> m_ParamChronoBtIfHigherN = { m_Params, "/backtracking/chrono_bt_if_higher_n", "Normal (non-short) incremental query: Backtrack chronologically, if the decision level difference is higher than the parameter", {0, numeric_limits<TUV>::max(), 50, 100, 100, 50, 100, 0} };
+		CTopiParam<TUV> m_ParamChronoBtIfHigherS = { m_Params, "/backtracking/chrono_bt_if_higher_s", "Short incremental query: Backtrack chronologically, if the decision level difference is higher than the parameter", {100, numeric_limits<TUV>::max(), 50, 100, 100, 50, 100, 100} };
+
 		CTopiParam<uint32_t> m_ParamConflictsToPostponeChrono = { m_Params, "/backtracking/conflicts_to_postpone_chrono", "The number of conflicts to postpone considering any backtracking, but NCB", {0, 0, 0, 4000, 8000, 0, 4000, 0} };
-		CTopiParam<uint8_t> m_ParamCustomBtStrat = { m_Params, "/backtracking/custom_bt_strat", "0: no custom backtracking; 1, 2: backtrack to the level containing the variable with the best score *instead of any instances of supposed chronological backtracking*, where ties are broken based on the value -- 1: higher levels are preferred; 2: lower levels are preferred ", {2, 0, 0, 0, 1, 2, 0, 0}, 0, 2 };
+		CTopiParam<uint8_t> m_ParamCustomBtStrat = { m_Params, "/backtracking/custom_bt_strat", "0: no custom backtracking; 1, 2: backtrack to the level containing the variable with the best score *instead of any instances of supposed chronological backtracking*, where ties are broken based on the value -- 1: higher levels are preferred; 2: lower levels are preferred ", {2, 0, 0, 0, 1, 0, 0, 0}, 0, 2 };
 		CTopiParam<bool> m_ParamReuseTrail = { m_Params, "/backtracking/reuse_trail", "0: no trail re-usage; 1: re-use trail (the idea is from SAT'20 Hickey&Bacchus' paper, but our implementation is fully compatible with CB)", 0 };
 
 		// Parameters: BCP
@@ -146,18 +151,19 @@ namespace Topor
 		CTopiParam<uint8_t> m_ParamBestContradictionStrat = { m_Params, "/bcp/best_contradiction_strat", "BCP's best contradiction strategy: 0: size; 1: glue; 2: first; 3: last", {0, 0, 0, 0, 0, 0, 0, 3}, 0, 3 };
 
 		// Parameters: Add-user-clause
-		CTopiParam<uint32_t> m_ParamAddClsRemoveClssGloballySatByLitMinSize = { m_Params, "/add_user_clause/remove_clss_globally_sat_by_literal_larger_size", "Assigned literal strategy: check for literals satisfied at decision level 0 and remove globally satisfied clauses for sizes larger than this parameter", numeric_limits<uint32_t>::max() };
+		CTopiParam<uint32_t> m_ParamAddClsRemoveClssGloballySatByLitMinSize = { m_Params, "/add_user_clause/remove_clss_globally_sat_by_literal_larger_size", "Assigned literal strategy: check for literals satisfied at decision level 0 and remove globally satisfied clauses for sizes larger than this parameter", {numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), 2} };
+		CTopiParam<uint32_t> m_ParamAddClsRemoveClssGloballySatByLitMinSizeAi = { m_Params, "/add_user_clause/remove_clss_globally_sat_by_literal_larger_size_ai", "After initial call: assigned literal strategy: check for literals satisfied at decision level 0 and remove globally satisfied clauses for sizes larger than this parameter", {numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), 5} };
 		CTopiParam<bool> m_ParamAddClsAtLevel0 = { m_Params, "/add_user_clause/guarantee_level_0", "Guarantee that adding a user clause always occurs at level 0 (by backtracking to 0 after every solve)", false };
 
 		// Parameters: Query type
 		CTopiParam<uint32_t> m_ParamShortQueryConfThrInv = { m_Params, "/query_type/short_query_conf_thr", "If the conflict threshold is at most this parameter, this invocation is considered to be incremental short", 10000 };
 
 		// Parameters: debugging
-		CTopiParam<uint8_t> m_ParamAssertConsistency = { m_Params, "/debugging/assert_consistency", "Debugging only: assert the consistency (0: none; 1: trail; 2: trail and WL's for assigned; 3: trail and WL's for all -- an extremely heavy operation)", 0, 0, 3};
+		CTopiParam<uint8_t> m_ParamAssertConsistency = { m_Params, "/debugging/assert_consistency", "Debugging only: assert the consistency (0: none; 1: trail; 2: trail and WL's for assigned; 3: trail and WL's for all -- an extremely heavy operation)", 0, 0, 3 };
 		CTopiParam<uint32_t> m_ParamAssertConsistencyStartConf = { m_Params, "/debugging/assert_consistency_start_conf", "Debugging only; meaningful only if /debugging/assert_consistency=1: assert the consistency starting with the provided conflicts number", 0 };
 		CTopiParam<uint32_t> m_ParamPrintDebugModelInvocation = { m_Params, "/debugging/print_debug_model_invocation", "The number of solver invocation to print the model in debug-model format: intended to be used for internal Topor debugging", 0 };
 		CTopiParam<uint32_t> m_ParamVerifyDebugModelInvocation = { m_Params, "/debugging/verify_debug_model_invocation", "The number of solver invocation, when the debug-model is verified: intended to be used for internal Topor debugging", 0 };
-		
+
 		// Parameters: assumptions handling
 		CTopiParam<bool> m_ParamAssumpsSimpAllowReorder = { m_Params, "/assumptions/allow_reorder", "Assumptions handling: allow reordering assumptions when filtering", true };
 		CTopiParam<bool> m_ParamAssumpsIgnoreInGlue = { m_Params, "/assumptions/ignore_in_glue", "Assumptions handling: ignore assumptions when calculating the glue score (following the SAT'13 paper \"Improving Glucose for Incremental SAT Solving with Assumptions : Application to MUS Extraction\")", false };
@@ -170,14 +176,14 @@ namespace Topor
 		CTopiParam<uint32_t> m_ParamFlippedRecordingMaxLbdToRecord = { m_Params, "/conflicts/flipped_recording_max_lbd", "Conflict analysis: record a flipped clause with LBD smaller than or equal to the value of the parameter", {numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(), 0, 40, numeric_limits<uint32_t>::max(), 0, 90} };
 		CTopiParam<bool> m_ParamFlippedRecordDropIfSubsumed = { m_Params, "/conflicts/flipped_drop_if_subsumed", "Conflict analysis: test and drop the flipped clause, if subsumed by the main clause", true };
 		CTopiParam<uint32_t> m_ParamOnTheFlySubsumptionContradictingMinGlueToDisable = { m_Params, "/conflicts/on_the_fly_subsumption/contradicting_min_glue_to_disable", "Conflict analysis: the minimal glue (LBD) to disable on-the-fly subsumption during conflict analysis over the contradicting clause (1: apply only over initial clauses)", {8, 0, 0, 0, 0, 8, 0, 8} };
-		CTopiParam<uint32_t> m_ParamOnTheFlySubsumptionParentMinGlueToDisable = { m_Params, "/conflicts/on_the_fly_subsumption/parent_min_glue_to_disable", "Conflict analysis: the minimal glue (LBD) to disable on-the-fly subsumption during conflict analysis over the parents (1: apply only over initial clauses)", {30, 0, 0, 0, 0, 30, 0, 30} };
+		CTopiParam<uint32_t> m_ParamOnTheFlySubsumptionParentMinGlueToDisable = { m_Params, "/conflicts/on_the_fly_subsumption/parent_min_glue_to_disable", "Conflict analysis: the minimal glue (LBD) to disable on-the-fly subsumption during conflict analysis over the parents (1: apply only over initial clauses)", {30, 0, 0, 0, 0, 1, 0, 30} };
 		CTopiParam<uint32_t> m_ParamOnTheFlySubsumptionContradictingFirstRestart = { m_Params, "/conflicts/on_the_fly_subsumption/contradicting_first_restart", "Conflict analysis: the first restart after which on-the-fly subsumption over the contradicting clause is enabled", 1 };
 		CTopiParam<uint32_t> m_ParamOnTheFlySubsumptionParentFirstRestart = { m_Params, "/conflicts/on_the_fly_subsumption/parent_first_restart", "Conflict analysis: the first restart after which on-the-fly subsumption over the parent clause is enabled", 1 };
 		CTopiParam<uint8_t> m_ParamAllUipMode = { m_Params, "/conflicts/all_uip/mode", "Conflict analysis: ALL-UIP scheme mode -- 0: disabled; 1: only main clause; 2: only flipped clause; 3: both main and flipped", 0, 0, 3 };
 		CTopiParam<uint32_t> m_ParamAllUipFirstRestart = { m_Params, "/conflicts/all_uip/first_restart", "Conflict analysis: the first restart after which the ALL-UIP scheme is enabled", 0 };
 		CTopiParam<uint32_t> m_ParamAllUipLastRestart = { m_Params, "/conflicts/all_uip/last_restart", "Conflict analysis: the last restart after which the ALL-UIP scheme is enabled", numeric_limits<uint32_t>::max() };
 		CTopiParam<double> m_ParamAllUipFailureThr = { m_Params, "/conflicts/all_uip/success_rate_failure_thr", "Conflict analysis: the threshold on ALL-UIP scheme failure (0.8 in the SAT'20 paper)", 0.8 };
-		
+
 		// Parameters: restart strategy
 		static constexpr uint8_t RESTART_STRAT_NUMERIC = 0;
 		static constexpr uint8_t RESTART_STRAT_LBD = 1;
@@ -188,7 +194,7 @@ namespace Topor
 		CTopiParam<uint8_t> m_ParamRestartStrategyN = { m_Params, "/restarts/strategy_n", "Restart strategy for the normal (non-short) incremental query: 0: arithmetic; 1: LBD-average-based", {RESTART_STRAT_NUMERIC, RESTART_STRAT_LBD, RESTART_STRAT_NUMERIC, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_NUMERIC}, 0, 1 };
 		// Restart strategy: short incremental query
 		CTopiParam<uint8_t> m_ParamRestartStrategyS = { m_Params, "/restarts/strategy_s", "Restart strategy for the short incremental query: 0: arithmetic; 1: LBD-average-based", {RESTART_STRAT_NUMERIC, RESTART_STRAT_LBD, RESTART_STRAT_NUMERIC, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_LBD, RESTART_STRAT_NUMERIC}, 0, 1 };
-				
+
 		CTopiParam<bool> m_ParamRestartNumericLocal = { m_Params, "/restarts/numeric/is_local", "Restarts, numeric strategies: use local restarts?", true };
 		CTopiParam<uint32_t> m_ParamRestartNumericInitConfThr = { m_Params, "/restarts/numeric/conflict_thr", "Restarts, numeric strategy: the initial value for the conflict threshold, which triggers a restart", {1000, 1000, 1000, 1000, 100, 1000, 1000, 1000}, 1 };
 		CTopiParam<uint8_t> m_ParamRestartNumericSubStrat = { m_Params, "/restarts/numeric/sub_strat", "Restarts, numeric sub-strategy: 0: arithmetic; 1: luby", 0, 0, 1 };
@@ -202,7 +208,7 @@ namespace Topor
 		CTopiParam<bool> m_ParamRestartLbdBlockingEnable = { m_Params, "/restarts/lbd/blocking/enable", "Restarts, LBD-average-based blocking enable", {true, true, false, false, true, true, false, true} };
 		CTopiParam<uint32_t> m_ParamRestartLbdBlockingConfsToConsider = { m_Params, "/restarts/lbd/blocking/conflicts_to_consider_blocking", "Restarts, LBD-average-based blocking strategy: the number of conflicts to consider blocking; relevant, if /restarts/lbd/blocking/enable=1", {10000, 10000, 10000, numeric_limits<uint32_t>::max(), 10000, 10000, numeric_limits<uint32_t>::max(), 10000} };
 		CTopiParam<double> m_ParamRestartLbdBlockingAvrgMult = { m_Params, "/restarts/lbd/blocking/average_mult", "Restarts, LBD-average-based blocking strategy: the multiplier in the formula for determining whether the restart is blocked: #assignments > multiplier * assignments-average", 1.4 };
-		CTopiParam<uint32_t> m_ParamRestartLbdBlockingWinSize = { m_Params, "/restarts/lbd/blocking/win_size", "Restarts, LBD-average-based blocking strategy: window size", 5000, 1 };
+		CTopiParam<uint32_t> m_ParamRestartLbdBlockingWinSize = { m_Params, "/restarts/lbd/blocking/win_size", "Restarts, LBD-average-based blocking strategy: window size", {5000, 5000, 5000, 5000, 5000, 10000, 5000, 5000}, 1 };
 
 		// Parameters: buffer multipliers
 		inline bool IsMultiplierParam(const string& paramName) const { return paramName == "/multiplier/clauses" || paramName == "/multiplier/variables" || paramName == "/multiplier/watches_if_separate"; }
@@ -218,21 +224,25 @@ namespace Topor
 		CTopiParam<double> m_ParamWastedFractionThrToDelete = { m_Params, "/deletion/wasted_fraction_thr", "If wasted > size * this_parameter, we physically compress the memory (0.2 in Fiver, Maple)", 0.2, numeric_limits<double>::epsilon(), 1. };
 		CTopiParam<bool> m_ParamCompressAllocatedPerWatch = { m_Params, "/deletion/compress_allocated_per_watch", "Tightly compress the allocated memory per every watch during memory compression (or, otherwise, never compress per watch)", true };
 		CTopiParam<bool> m_ParamReduceBuffersSizeAfterCompression = { m_Params, "/deletion/reduce_buffers_size_after_compression", "Reduce the physical size of the clause and watch buffers after compression, if required (to the current size * Multiplier)", true };
-		
+
 		// Parameters: clause deletion
-		CTopiParam<bool> m_ParamClsDelStrategy = { m_Params, "/deletion/clause/strategy", "Clause deletion strategy (0: no clause deletion; 1: clause deletion)", true };
+		CTopiParam<uint8_t> m_ParamClsDelStrategy = { m_Params, "/deletion/clause/strategy", "Clause deletion strategy (0: no clause deletion; 1: Topor; 2: Fiver)", 1, 0, 2 };
 		CTopiParam<bool> m_ParamClsDelDeleteOnlyAssumpDecLevel = { m_Params, "/deletion/clause/delete_only_assump_dec_level", "Clause deletion: apply clause deletion only when at assumption decision level", false };
 		CTopiParam<double> m_ParamClsLowDelActivityDecay = { m_Params, "/deletion/clause/activity_decay", "Clause deletion: activity decay factor", 0.999, numeric_limits<double>::epsilon(), 1. };
 
 		CTopiParam<float> m_ParamClsDelLowFracToDelete = { m_Params, "/deletion/clause/frac_to_delete", "Clause deletion: the fraction of clauses to delete", {0.7f, 0.8f, 0.8f, 0.8f, 0.8f, 0.7f, 0.8f, 0.7f}, numeric_limits<float>::epsilon(), (float)1.f };
 		CTopiParam<uint32_t> m_ParamClsDelLowTriggerInit = { m_Params, "/deletion/clause/trigger_init", "Clause deletion: the initial number of learnts to trigger clause deletion", 6000 };
 		CTopiParam<uint32_t> m_ParamClsDelLowTriggerInc = { m_Params, "/deletion/clause/trigger_linc", "Clause deletion: the increment in learnts to trigger clause deletion", 75 };
-		CTopiParam<double> m_ParamClsDelLowTriggerMult = { m_Params, "/deletion/clause/trigger_inc_mult", "Clause deletion: the change in increment in learnts to trigger clause deletion (that is, the value by which /deletion/clause/trigger_linc is multiplied)", 1.2, 1. };
-		CTopiParam<uint32_t> m_ParamClsDelLowTriggerMax = { m_Params, "/deletion/clause/trigger_max", "Clause deletion: the maximal number of learnts to activate clause deletion", 60000 };		
-		CTopiParam<TUV> m_ParamClsDelLowMinGlueFreeze = { m_Params, "/deletion/clause/glue_min_freeze", "Initial query: clause deletion: protect clauses for one round if their glue decreased and is lower than this value", {4, 30, 30, 30, 30, 4, 30, 30}, 0, (TUV)numeric_limits<uint8_t>::max() };
+		CTopiParam<double> m_ParamClsDelS1LowTriggerMult = { m_Params, "/deletion/clause/s1/trigger_inc_mult", "Clause deletion: the change in increment in learnts to trigger clause deletion (that is, the value by which /deletion/clause/trigger_linc is multiplied)", 1.2, 1. };
+		CTopiParam<uint32_t> m_ParamClsDelS1LowTriggerMax = { m_Params, "/deletion/clause/s1/trigger_max", "Clause deletion: the maximal number of learnts to activate clause deletion", 60000 };
+		CTopiParam<uint8_t> m_ParamClsDelS2LowGlue = { m_Params, "/deletion/clause/s2/low_glue", "Clause deletion: the low glue for an additional current-change push", {3, 3, 3, 3, 3, 6, 3, 3} };
+		CTopiParam<uint8_t> m_ParamClsDelS2MediumGlue = { m_Params, "/deletion/clause/s2/medium_glue", "Clause deletion: the medium glue for an additional current-change push", {5, 5, 5, 5, 5, 8, 5, 5} };
+		CTopiParam<uint32_t> m_ParamClsDelS2LowMediumIncValue = { m_Params, "/deletion/clause/s2/low_medium_inc", "Clause deletion: the increment for the low&medium push to current-change", 1000 };
+
+		CTopiParam<TUV> m_ParamClsDelLowMinGlueFreeze = { m_Params, "/deletion/clause/glue_min_freeze", "Initial query: clause deletion: protect clauses for one round if their glue decreased and is lower than this value", {4, 30, 30, 30, 30, 5, 30, 30}, 0, (TUV)numeric_limits<uint8_t>::max() };
 		CTopiParam<TUV> m_ParamClsDelLowMinGlueFreezeAi = { m_Params, "/deletion/clause/glue_min_freeze_ai", "Normal incremental query: clause deletion: protect clauses for one round if their glue decreased and is lower than this value", 30, 0, (TUV)numeric_limits<uint8_t>::max() };
 		CTopiParam<TUV> m_ParamClsDelLowMinGlueFreezeS = { m_Params, "/deletion/clause/glue_min_freeze_s", "Short incremental query: clause deletion: protect clauses for one round if their glue decreased and is lower than this value", {5, 30, 30, 30, 30, 5, 30, 30}, 0, (TUV)numeric_limits<uint8_t>::max() };
-		CTopiParam<TUV> m_ParamClsDelGlueNeverDelete = { m_Params, "/deletion/clause/glue_never_delete", "Clause deletion: the highest glue value blocking clause deletion", 2, 0, (TUV)numeric_limits<uint8_t>::max() };
+		CTopiParam<TUV> m_ParamClsDelGlueNeverDelete = { m_Params, "/deletion/clause/glue_never_delete", "Clause deletion: the highest glue value blocking clause deletion", {2, 2, 2, 2, 2, 3, 2, 2}, 0, (TUV)numeric_limits<uint8_t>::max() };
 		CTopiParam<TUV> m_ParamClsDelGlueClusters = { m_Params, "/deletion/clause/glue_clusters", "Clause deletion: the number of glue clusters", {11, 0, 0, 0, 0, 11, 0, 8}, 0, (TUV)numeric_limits<uint8_t>::max() };
 		CTopiParam<TUV> m_ParamClsDelGlueMaxCluster = { m_Params, "/deletion/clause/glue_max_lex_cluster", "Clause deletion: the highest glue which makes the clause belong to a glue-cluster", {16, 0, 0, 0, 0, 16, 0, 16}, 0, (TUV)numeric_limits<uint8_t>::max() };
 
@@ -562,9 +572,8 @@ namespace Topor
 		void WLRemoveBinaryWatch(TULit l, TULit otherWatch);
 		// Binary watch exists?
 		bool WLBinaryWatchExists(TULit l, TULit otherWatch);		
-		// Returns an index to the place in m_B, where clause index in inserted
-		// This is to handle cases when clsInd is but a placeholder; we also allow not to specify clsInd to handle this case
-		TUInd WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd = BadClsInd);
+		// Add a long watch
+		void WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd = BadClsInd);
 		// Remove a long watch
 		void WLRemoveLongWatch(TULit l, size_t longWatchInd);
 		// Find the index of the given clause in l's watch
@@ -603,7 +612,7 @@ namespace Topor
 		//			(a) Increasing the odds that we won't need to copy over the watches during the instance creation process
 		//			(b) Being cache-friendly
 		bool WLIsLitBetter(TULit lCand, TULit lOther) const;
-
+		inline TUInd LastWLEntry(TULit l) { return m_Watches[l].m_WBInd + m_Watches[l].GetLongEntries() - LitsInInd; }
 		/*
 		* DECISION LEVELS, ASSIGNMENTS, TRAIL
 		*/
@@ -1119,6 +1128,7 @@ namespace Topor
 		
 		void SimplifyIfRequired();
 		void CompressBuffersIfRequired();
+		void CompressWLs();
 		bool DebugAssertWaste();
 		void DeleteClausesIfRequired();
 
@@ -1138,7 +1148,11 @@ namespace Topor
 			uint64_t m_TriggerNext = 0;
 			uint64_t m_TriggerInc = 0;
 			double m_TriggerMult = 0.;
-			uint64_t m_TriggerMax = 0;
+			union 
+			{
+				uint64_t m_TriggerMax = 0;
+				uint64_t m_CurrChange;
+			};
 			float m_FracToDelete = 0.;		
 			uint8_t m_GlueNeverDelete = 0;
 			uint8_t m_Clusters = 0;

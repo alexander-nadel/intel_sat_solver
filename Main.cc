@@ -170,10 +170,10 @@ int main(int argc, char** argv)
 	if (argc == 1 || strcmp(argv[1], "-help") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)
 	{
 		cout << print_as_color <ansi_color_code::red>("c Usage:") << endl;
-		cout << "\tc topor_tool/topor_static/topor_debug/topor <CNF> OPTIONAL: <Param1> <Val1> <Param2> <Val2> ... <ParamN> <ValN>" << endl;
+		cout << "\tc <Intel(R) SAT Solver Executable> <CNF> OPTIONAL: <Param1> <Val1> <Param2> <Val2> ... <ParamN> <ValN>" << endl;
 		cout << "\tc <CNF> can either be a text file or an archive file in one of the following formats: .xz, .lzma, .bz2, .gz, .7z (the test is based on the file signature)" << endl;
 		cout << "\tc <CNF> is expected to be in simplified DIMACS format, used at SAT Competitions (http://www.satcompetition.org/2011/format-benchmarks2011.html) with the following optional extension to support incrementality:" << endl;
-		cout << "\tc The following Intel(R) SAT Solver-specific commands are also legal (ignore \"c \" below): " << endl;
+		cout << "\tc The following Intel(R) SAT Solver Executable-specific commands are also legal (ignore \"c \" below): " << endl;
 		cout << "\tc r <ParamName> <ParamVal>" << endl;
 		cout << "\tc ot <TimeOut> <IsCpuTimeOut>" << endl;
 		cout << "\tc oc <ConflictThreshold>" << endl;
@@ -183,7 +183,7 @@ int main(int argc, char** argv)
 		cout << "\tc b <BacktrackLevel>" << endl;
 		cout << "\tc s <Lit1 <Lit2> ... <Litn>: solve under the assumptions {<Lit1 <Lit2> ... <Litn>}" << endl;		
 		cout << "\tc The solver parses the p cnf vars clss line, but it ignores the number of clauses and uses the number of variables as a non-mandatory hint" << endl;
-		cout << print_as_color <ansi_color_code::red>("c Intel(R) SAT Solver parameters:") << endl;
+		cout << print_as_color <ansi_color_code::red>("c Intel(R) SAT Solver executable parameters:") << endl;
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/bin_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a binary DRAT proof\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/text_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a text DRAT proof (if more than one /topor_tool/bin_drat_file and /topor_tool/text_drat_file parameters provided, only the last one is applied, rest are ignored)\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the models for satisfiable invocations?\n";

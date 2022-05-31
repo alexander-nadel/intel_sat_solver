@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -42,14 +42,15 @@ TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
 	else if (cls.size() > 2)
 	{
 		m_Stat.NewClause(cls.size(), isLearnt);
-		// Long clause
-		array<TUInd, 2> clsIndPtrs = {};
+		// Long clause		
 
-		clsIndPtrs[0] = WLAddLongWatch(cls[0], cls[1]);
+		WLAddLongWatch(cls[0], cls[1]);
 		if (unlikely(IsUnrecoverable())) return clsStart;
 
-		clsIndPtrs[1] = WLAddLongWatch(cls[1], cls[0]);
+		WLAddLongWatch(cls[1], cls[0]);
 		if (unlikely(IsUnrecoverable())) return clsStart;
+		
+		const array<TUInd, 2> clsIndPtrs = { LastWLEntry(cls[0]), LastWLEntry(cls[1]) };
 
 		const bool isOversized = isLearnt && cls.size() > ClsLearntMaxSizeWithGlue;
 
@@ -83,7 +84,7 @@ TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
 			{
 				m_FirstLearntClsInd = m_BNext;
 			}
-			if (m_ParamClsDelStrategy)
+			if (m_ParamClsDelStrategy > 0)
 			{
 				ClsSetActivityAndSkipdelTo0(m_BNext);
 			}			
@@ -544,13 +545,28 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 			assert(ai.m_IsAssigned);
 			if (ai.IsAssignedBinary() || vi.m_ParentClsInd != BadClsInd)
 			{
-				auto ContradictingTrinary2Binary = [&]()
+				auto ContradictingTrinary2BinaryByResolvingCurrVar = [&]()
 				{
 					const TULit l1 = contradictingCls[GetVar(contradictingCls[0]) == v ? 1 : 0];
 					const TULit l2 = contradictingCls[GetVar(contradictingCls[2]) == v ? 1 : 2];
 					DeleteCls(contradictionInfo.m_ParentClsInd);
 					contradictionInfo.m_IsContradictionInBinaryCls = true;
 					contradictionInfo.m_BinClause = { l1, l2 };
+					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true);
+				};
+
+				auto Contradicting2BinaryByRemovingLevel0 = [&]()
+				{
+					size_t currGoodLitInd = 0;
+					for (TULit l : contradictingCls)
+					{
+						if (GetAssignedDecLevel(l) != 0)
+						{
+							contradictionInfo.m_BinClause[currGoodLitInd++] = l;
+						}
+					}
+					assert(currGoodLitInd == 2);
+					contradictionInfo.m_IsContradictionInBinaryCls = true;
 					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true);
 				};
 
@@ -600,7 +616,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 							// A trinary clause, which will now convert into a binary one
 							if (contradictingCls.size() == 3)
 							{
-								ContradictingTrinary2Binary();								
+								ContradictingTrinary2BinaryByResolvingCurrVar();								
 								longInitParentSubsumedByLearntContradicting = false;
 							}
 							else
@@ -632,8 +648,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 									m_Stat.m_LitsRemovedByConfSubsumption++;
 									if (ClsGetSize(vi.m_ParentClsInd) == 3)
 									{
-										swap(vi.m_ParentClsInd, contradictionInfo.m_ParentClsInd);
-										ContradictingTrinary2Binary();
+										Contradicting2BinaryByRemovingLevel0();
 									}
 									else
 									{

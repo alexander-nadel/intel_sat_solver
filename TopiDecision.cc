@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -48,10 +48,13 @@ void CTopi::UpdateDecisionStrategyOnNewConflict(TUV glueLearnt, TUVar lowestGlue
 
 	assert(m_Stat.m_VarDecay != 0.0);
 
+	const double varDecayInc = m_QueryCurr == TQueryType::QUERY_INC_SHORT ? m_ParamVarDecayIncS : m_QueryCurr == TQueryType::QUERY_INC_NORMAL ? m_ParamVarDecayIncAi : m_ParamVarDecayInc;
+	const double varDecayMax = m_QueryCurr == TQueryType::QUERY_INC_SHORT ? m_ParamVarDecayMaxS : m_QueryCurr == TQueryType::QUERY_INC_NORMAL ? m_ParamVarDecayMaxAi : m_ParamVarDecayMax;
+
 	if (m_ParamVarDecayUpdateConfRate > 0 && (m_Stat.m_Conflicts % m_ParamVarDecayUpdateConfRate == 0) 
-		&& D1LowerOrEqD2UpToPrecision(m_Stat.m_VarDecay + m_ParamVarDecayInc, m_ParamVarDecayMax))
+		&& D1LowerOrEqD2UpToPrecision(m_Stat.m_VarDecay + varDecayInc, varDecayMax))
 	{ 
-		m_Stat.m_VarDecay += m_ParamVarDecayInc;
+		m_Stat.m_VarDecay += varDecayInc;
 	}
 
 	if (m_ParamVarActivityGlueUpdate && glueLearnt != 0)

@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include <functional>
@@ -954,6 +954,16 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			m_ParamVarActivityUseMapleLevelBreaker = m_ParamVarActivityUseMapleLevelBreakerAi;
 		}
 
+		if (m_QueryCurr == TQueryType::QUERY_INIT && m_ParamAddClsRemoveClssGloballySatByLitMinSizeAi != m_ParamAddClsRemoveClssGloballySatByLitMinSize)
+		{
+			m_ParamAddClsRemoveClssGloballySatByLitMinSize = m_ParamAddClsRemoveClssGloballySatByLitMinSizeAi;
+		}
+
+		if (m_QueryCurr == TQueryType::QUERY_INIT)
+		{
+			m_VsidsHeap.SetInitOrder(m_ParamVsidsInitOrderAi);
+		}
+
 		if (m_QueryCurr == TQueryType::QUERY_INIT && !m_AfterInitInvParamVals.empty())
 		{
 			for (auto& pv : m_AfterInitInvParamVals)
@@ -1278,7 +1288,7 @@ void CTopi::SetMultipliers()
 void CTopi::MarkWatchBufferChunkDeletedOrByLiteral(TUInd wlbInd, TUInd allocatedEntries, TULit l)
 {
 	// Mark the moved region as deleted in the following format:
-	// [long_2(allocated-entries) 0] or as marked by a literal if, l != 0
+	// [log_2(allocated-entries) 0] or as marked by a literal if, l != 0
 	// The latter mode is relevant during compression
 	m_W[wlbInd] = countr_zero(allocatedEntries);
 	m_W[wlbInd + 1] = l;

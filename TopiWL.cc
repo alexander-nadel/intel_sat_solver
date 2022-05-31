@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include <functional>
@@ -132,7 +132,7 @@ void CTopi::WLRemoveLongWatch(TULit l, size_t longWatchInd)
 	}
 }
 
-TUInd CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
+void CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 {
 	assert(l < m_Watches.cap());
 	assert(clsInd < m_B.cap());
@@ -141,7 +141,7 @@ TUInd CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 	TULit* watchArena = WLPrepareArena(l, false, true);
 	assert(watchArena != nullptr || IsUnrecoverable());
 	// || watchArena == nullptr was added because of a Klocwork warning. WLPrepareArena guarantees that IsUnrecoverable() holds if watchArena == nullptr.
-	if (unlikely(IsUnrecoverable()) || watchArena == nullptr) return BadClsInd;
+	if (unlikely(IsUnrecoverable()) || watchArena == nullptr) return;
 
 	// Add the long watch
 	TWatchInfo& wi = m_Watches[l];
@@ -180,8 +180,6 @@ TUInd CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 
 	// Increase the number of long watches in the watch-info
 	++wi.m_LongWatches;
-
-	return wi.m_WBInd + wi.GetLongEntries() - LitsInInd;
 }
 
 TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLongWatch)
@@ -190,12 +188,18 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 	
 	auto AllocateNewArenaAndCopyOldArenaIfAny = [&](TUInd sz) -> TULit*
 	{
-		const TUInd allocatedWordsRequired = m_WNext + sz;
+		TUInd allocatedWordsRequired = m_WNext + sz;
 		if (unlikely(allocatedWordsRequired < m_WNext))
 		{
-			SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, "WLPrepareArena: reached the end of the buffer");
-			return nullptr;
+			CompressWLs();
+			allocatedWordsRequired = m_WNext + sz;
+			if (unlikely(allocatedWordsRequired < m_WNext))
+			{
+				SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, "WLPrepareArena: reached the end of the buffer");
+				return nullptr;
+			}
 		}
+	
 
 		m_W.reserve_beyond_if_requried(allocatedWordsRequired, true);
 		if (unlikely(m_W.uninitialized_or_erroneous()))

@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #pragma once
@@ -133,7 +133,7 @@ namespace Topor
 		{
 			stringstream ss;
 
-			ss << print_as_color<ansi_color_code::red>("c Topor parameters:") << endl;
+			ss << print_as_color<ansi_color_code::red>("c solver library parameters:") << endl;
 
 			string prevClass = "";
 			for (auto currParam : m_Name2DescrUpdateGetval)
@@ -317,6 +317,11 @@ namespace Topor
 			if (anyVal == numeric_limits<T>::min())
 			{
 				return "min(" + GetTypeName() + ")";
+			}
+
+			if (anyVal == numeric_limits<T>::lowest())
+			{
+				return "lowest(" + GetTypeName() + ")";
 			}
 
 			if (anyVal == numeric_limits<T>::max())

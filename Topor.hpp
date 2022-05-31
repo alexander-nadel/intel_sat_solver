@@ -1,4 +1,4 @@
-// Copyright(C) 2021 Intel Corporation
+// Copyright(C) 2021-2022 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #pragma once
@@ -38,7 +38,7 @@ namespace Topor
 		//		where the second member of the pair is true, iff the timeout refers to CPU time, otherwise, it's Wall time. 
 		// - A conflict threshold on the current invocation
 		TToporReturnVal Solve(const std::span<TLit> assumps = {}, std::pair<double, bool> toInSecIsCpuTime = std::make_pair((std::numeric_limits<double>::max)(), true), uint64_t confThr = (std::numeric_limits<uint64_t>::max)());
-		// Set a parameter value; using double for avalue, since it encompasses all the arithmetic types, which can be used for parameters, that is:
+		// Set a parameter value; using double for the value, since it encompasses all the arithmetic types, which can be used for parameters, that is:
 		// Signed and unsigned integers of at most 32 bits and floating-points of at most the size of a C++ double 
 		// Sets the status to permanent error, if the name/value combination is wrong. Run GetErrorStatus for details.
 		void SetParam(const std::string& paramName, double newVal);
