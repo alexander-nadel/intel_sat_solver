@@ -25,6 +25,9 @@ LFLAGS    ?= -Wall -lpthread
 
 COPTIMIZE ?= -O3
 
+CFLAGS    += -I$(MROOT)/../.. -I$(MROOT)
+LFLAGS    += -L$(MROOT)/../..
+
 .PHONY : s p d r rs clean 
 
 s:	$(EXEC)

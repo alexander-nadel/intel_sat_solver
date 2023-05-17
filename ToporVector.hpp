@@ -14,7 +14,7 @@ namespace Topor
 		using Par = CDynArray<T>;
 		
 		CVector(size_t initSz = 0, size_t next = 0) : CDynArray<T>(initSz), m_Next(next) {}
-		CVector(size_t initSz, size_t initVal, size_t next) : CDynArray<T>(initSz, initVal), m_Next(next) {}
+		CVector(size_t initSz, unsigned char initVal, size_t next) : CDynArray<T>(initSz, initVal), m_Next(next) {}
 		// Copy constructor
 		CVector(const CVector& v) : CDynArray<T>(v) { m_Next = v.m_Next; }
 		// Assignment operator

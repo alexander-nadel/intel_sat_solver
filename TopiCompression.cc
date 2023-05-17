@@ -3,11 +3,13 @@
 
 #include "Topi.hpp"
 #include "SetInScope.h"
+#include <unordered_set>
 
 using namespace Topor;
 using namespace std;
 
-void CTopi::ReserveVarAndLitData()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
 {
 	ReserveExactly(m_Watches, GetNextLit(), 0, "m_Watches in ReserveVarAndLitData");
 	ReserveExactly(m_AssignmentInfo, GetNextVar(), 0, "m_AssignmentInfo in ReserveVarAndLitData");
@@ -20,15 +22,17 @@ void CTopi::ReserveVarAndLitData()
 	if (m_ParamFlippedRecordingMaxLbdToRecord != 0) ReserveExactly(m_HandyLitsClearBefore[1], GetNextVar(), "m_HandyLitsCleanBefore[1] in ReserveVarAndLitData");
 	ReserveExactly(m_VisitedVars, GetNextVar(), "m_VisitedVars in ReserveVarAndLitData");
 	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar(), 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
-	if (m_ParamReuseTrail) ReserveExactly(m_ReuseTrail, GetNextVar(), "m_TrailToReuse in ReserveVarAndLitData");	
+	if (m_ParamReuseTrail) ReserveExactly(m_ReuseTrail, GetNextVar(), "m_TrailToReuse in ReserveVarAndLitData");
 	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), "m_I2ELitMap in ReserveVarAndLitData");
 	if (IsCbLearntOrDrat()) ReserveExactly(m_UserCls, GetNextVar(), "m_UserCls in ReserveVarAndLitData");
 	if (m_ParamOnTheFlySubsumptionParentMinGlueToDisable > 0) ReserveExactly(m_CurrClsCounters, GetNextVar(), 0, "m_CurrClsCounters in ReserveVarAndLitData");
 	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, GetNextVar(), 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
-	if (m_ParamCustomBtStrat > 0) ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
+	if (m_ParamCustomBtStratInit > 0 || m_ParamCustomBtStratS > 0 || m_ParamCustomBtStratN > 0) ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
+	ReserveExactly(m_HandleNewUserCls, GetNextVar(), "m_HandleNewUserCls in ReserveVarAndLitData");
 }
 
-void CTopi::RemoveVarAndLitData(TUVar v)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::RemoveVarAndLitData(TUVar v)
 {
 	assert(!IsAssignedVar(v));
 	for (uint8_t wInd = 0; wInd < 2; ++wInd)
@@ -37,11 +41,12 @@ void CTopi::RemoveVarAndLitData(TUVar v)
 		if (!wi.IsEmpty())
 		{
 			MarkWatchBufferChunkDeleted(wi);
-		}		
-	}	
+		}
+	}
 }
 
-void CTopi::MoveVarAndLitData(TUVar vFrom, TUVar vTo)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MoveVarAndLitData(TUVar vFrom, TUVar vTo)
 {
 	assert(!IsAssignedVar(vTo));
 
@@ -87,67 +92,24 @@ void CTopi::MoveVarAndLitData(TUVar vFrom, TUVar vTo)
 	if (UseI2ELitMap()) m_I2ELitMap[vTo] = move(m_I2ELitMap[vFrom]);
 }
 
-void CTopi::RecordDeletedLitsFromCls(TUV litsNum)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::RecordDeletedLitsFromCls(TUV litsNum, uint16_t bitsForLit)
 {
 	m_Stat.RecordDeletedLitsFromCls(litsNum);
-	m_BWasted += litsNum;
-}
-
-void CTopi::DeleteLitFromCls(TUInd clsInd, TULit l)
-{
-	auto cls = Cls(clsInd);
-	assert(cls.size() > 3);
-
-	auto it = find(cls.begin(), cls.end(), l);
-	assert(it != cls.end());
-
-	if (it - cls.begin() < 2)
+	if constexpr (Compress)
 	{
-		const bool myWatchInd = it != cls.begin();
-		auto bestWLCandIt = FindBestWLCand(cls, m_DecLevel);		
-		SwapWatch(clsInd, myWatchInd, bestWLCandIt);
-		WLSetCached(cls[!myWatchInd], clsInd, cls[myWatchInd]);
-		swap(*bestWLCandIt, cls.back());
+		assert(bitsForLit != 0);
+		m_BWasted += litsNum * bitsForLit;
 	}
 	else
 	{
-		swap(*it, cls.back());
-		// Cached update is required, since the cache might point at the deleted literal
-		WLSetCached(cls[0], clsInd, cls[1]);
-		WLSetCached(cls[1], clsInd, cls[0]);
-	}
-	
-	// Creating or extending a deleted chunk
-	TUInd nextChunkInd = ClsEnd(clsInd);
-	if (nextChunkInd < m_BNext && ClsChunkDeleted(nextChunkInd))
-	{
-		// Extending the deleted chunk
-		const auto newSz = ClsGetSize(nextChunkInd) + 1;
-		m_B[--nextChunkInd] = newSz;
-		assert(cls.back() == newSz);
-		if (newSz >= 3)
-		{
-			m_B[nextChunkInd + 2] = BadULit;
-		}		
-		assert(ClsChunkDeleted(nextChunkInd));
-		assert(ClsGetSize(nextChunkInd) == newSz);
-	}
-	else
-	{
-		cls.back() = BadULit;
-	}
-
-	// Resizing our clause	
-	ClsSetSize(clsInd, (TUV)cls.size() - 1);
-	RecordDeletedLitsFromCls(1);
-	if (IsCbLearntOrDrat())
-	{
-		cls = Cls(clsInd);
-		NewLearntClsApplyCbLearntDrat(cls);
+		assert(bitsForLit == 0);
+		m_BWasted += litsNum;
 	}
 }
 
-void CTopi::DeleteBinaryCls(const span<TULit> binCls)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::DeleteBinaryCls(const span<TULit> binCls)
 {
 	assert(binCls.size() == 2);
 	WLRemoveBinaryWatch(binCls[0], binCls[1]);
@@ -155,46 +117,8 @@ void CTopi::DeleteBinaryCls(const span<TULit> binCls)
 	m_Stat.DeleteBinClauses(1);
 }
 
-void CTopi::DeleteCls(TUInd clsInd, array<TULit, 2>* newBinCls)
-{
-	auto cls = Cls(clsInd);
-
-	if (unlikely(clsInd == m_FirstLearntClsInd))
-	{
-		assert(ClsGetIsLearnt(clsInd));
-		m_FirstLearntClsInd = ClsEnd(clsInd);	
-		while (m_FirstLearntClsInd < m_BNext && ClsChunkDeleted(m_FirstLearntClsInd))
-		{
-			m_FirstLearntClsInd = ClsEnd(m_FirstLearntClsInd);
-		}
-		assert(m_FirstLearntClsInd == m_BNext || ClsGetIsLearnt(clsInd));
-	}
-	
-	m_BWasted += (TUInd)cls.size() + ClsLitsStartOffset(ClsGetIsLearnt(clsInd), ClsGetIsOversized(clsInd));
-
-	m_Stat.DeleteClause(cls.size(), ClsGetIsLearnt(clsInd));
-	for (uint8_t currWatchI = 0; currWatchI <= 1; ++currWatchI)
-	{
-		size_t clsWlInd = WLGetLongWatchInd(cls[currWatchI], clsInd);
-		assert(clsWlInd != numeric_limits<size_t>::max());
-		WLRemoveLongWatch(cls[currWatchI], clsWlInd);
-	}
-
-	if (ClsGetIsLearnt(clsInd))
-	{
-		m_B[clsInd] = (TULit)cls.size() + (TULit)ClsLitsStartOffset(ClsGetIsLearnt(clsInd), ClsGetIsOversized(clsInd)) - (TULit)1;		
-	}
-	assert(!ClsGetIsLearnt(clsInd));
-
-	m_B[clsInd + 2] = BadULit;
-	if (newBinCls != nullptr)
-	{
-		m_B[clsInd + 1] = (*newBinCls)[0];
-		m_B[clsInd + 3] = (*newBinCls)[1];
-	}
-}
-
-void CTopi::ClsDeletionInit()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ClsDeletionInit()
 {
 	if (!m_ClsDelInfo.m_Initialized)
 	{
@@ -210,17 +134,18 @@ void CTopi::ClsDeletionInit()
 		{
 			m_ClsDelInfo.m_CurrChange = (uint64_t)m_ParamClsDelLowTriggerInit;
 		}
-		
-		m_ClsDelInfo.m_FracToDelete = m_ParamClsDelLowFracToDelete;		
+
+		m_ClsDelInfo.m_FracToDelete = m_ParamClsDelLowFracToDelete;
 		m_ClsDelInfo.m_GlueNeverDelete = (uint8_t)m_ParamClsDelGlueNeverDelete;
 		m_ClsDelInfo.m_Clusters = (uint8_t)m_ParamClsDelGlueClusters;
 		m_ClsDelInfo.m_MaxClusteredGlue = (uint8_t)m_ParamClsDelGlueMaxCluster;
 
 		m_ClsDelInfo.m_Initialized = true;
-	}	
+	}
 }
 
-void CTopi::ClsDeletionDecayActivity()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ClsDeletionDecayActivity()
 {
 	if (m_ParamClsDelStrategy > 0)
 	{
@@ -228,7 +153,8 @@ void CTopi::ClsDeletionDecayActivity()
 	}
 }
 
-void CTopi::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
 {
 	if (m_ParamClsDelStrategy > 0)
 	{
@@ -241,7 +167,7 @@ void CTopi::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
 		if (currActivity > 1e20)
 		{
 			// Rescale:
-			for (TUInd clsIndLocal = m_FirstLearntClsInd; clsIndLocal < m_BNext; clsIndLocal = ClsEnd(clsIndLocal))
+			for (TUInd clsIndLocal = ClsLoopFirst(true); !ClsLoopCompleted(); clsIndLocal = ClsLoopNext())
 			{
 				if (ClsChunkDeleted(clsIndLocal) || !ClsGetIsLearnt(clsIndLocal))
 				{
@@ -261,9 +187,10 @@ void CTopi::ClsDelNewLearntOrGlueUpdate(TUInd clsInd, TUV prevGlue)
 	}
 }
 
-void CTopi::DeleteClausesIfRequired()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::DeleteClausesIfRequired()
 {
-	if (m_ParamClsDelStrategy == 0 || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT || 
+	if (m_ParamClsDelStrategy == 0 || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT ||
 		(ClsDeletionTrigger() < m_ClsDelInfo.m_TriggerNext) || (m_ParamClsDelDeleteOnlyAssumpDecLevel && m_DecLevel > m_DecLevelOfLastAssignedAssumption))
 	{
 		return;
@@ -272,14 +199,14 @@ void CTopi::DeleteClausesIfRequired()
 	assert(NV(1) || P("Clause deletion started for priority\n"));
 	assert(NV(2) || P("The trail: " + STrail() + "\n"));
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
 		++m_Stat.m_ClssDel;
-		
+
 		m_ClsDelInfo.m_ConfsPrev = m_Stat.m_Conflicts;
 
 		if (unlikely(m_FirstLearntClsInd != numeric_limits<decltype(m_FirstLearntClsInd)>::max() && m_FirstLearntClsInd >= m_BNext))
@@ -293,9 +220,9 @@ void CTopi::DeleteClausesIfRequired()
 		}
 
 		assert(NV(1) || P("Clause deletion finished for priority\n"));
-		assert(NV(2) || P("The trail: " + STrail() + "\n"));	
+		assert(NV(2) || P("The trail: " + STrail() + "\n"));
 
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 	});
@@ -306,7 +233,7 @@ void CTopi::DeleteClausesIfRequired()
 	CVector<TUInd> learnts(learntsSz);
 	if (learnts.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::DeleteClausesIfRequired: couldn't allocate learnts");
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::DeleteClausesIfRequired: couldn't allocate learnts");
 		return;
 	}
 
@@ -327,19 +254,19 @@ void CTopi::DeleteClausesIfRequired()
 		if (!ai.IsAssignedBinary() && (vi.m_DecLevel > 0 || clsInd + 2 < m_B.cap()) && clsInd != BadClsInd && ClsGetIsLearnt(clsInd))
 		{
 			assert(!ClsChunkDeleted(clsInd));
-			
+
 			if (!ClsGetSkipdel(clsInd))
 			{
 				++undeletableButNotTouched;
 				if (vi.m_DecLevel > 0)
 				{
 					ClsSetSkipdel(clsInd, true);
-				}				
+				}
 			}
 		}
 	}
 
-	for (TUInd clsInd = m_FirstLearntClsInd; clsInd < m_BNext; clsInd = ClsEnd(clsInd))
+	for (TUInd clsInd = ClsLoopFirst(true); !ClsLoopCompleted(); clsInd = ClsLoopNext())
 	{
 		if (ClsChunkDeleted(clsInd) || !ClsGetIsLearnt(clsInd) || ClsGetGlue(clsInd) <= m_ClsDelInfo.m_GlueNeverDelete)
 		{
@@ -350,17 +277,16 @@ void CTopi::DeleteClausesIfRequired()
 			}
 			continue;
 		}
-		
+
 		if (ClsGetSkipdel(clsInd))
 		{
 			ClsSetSkipdel(clsInd, false);
 			continue;
 		}
 
-
 		learnts.push_back(clsInd);
 	}
-	
+
 	auto learntsSpan = learnts.get_span();
 
 	if (m_ClsDelInfo.m_Clusters == 0)
@@ -382,11 +308,11 @@ void CTopi::DeleteClausesIfRequired()
 				return clusters[0] > clusters[1];
 			}
 
-			const array<float, 2> acts = { ClsGetActivity(clsInd1), ClsGetActivity(clsInd2) };			
+			const array<float, 2> acts = { ClsGetActivity(clsInd1), ClsGetActivity(clsInd2) };
 			return acts[0] < acts[1] || (acts[0] == acts[1] && glues[0] > glues[1]);
 		});
 	}
-	
+
 	size_t iLastExcl = (decltype(iLastExcl))((float)(ClsDeletionTrigger() - undeletableButNotTouched) * m_ClsDelInfo.m_FracToDelete);
 	if (iLastExcl > learnts.size())
 	{
@@ -430,10 +356,10 @@ void CTopi::DeleteClausesIfRequired()
 			m_ClsDelInfo.m_TriggerNext = (uint64_t)triggerNext;
 		}
 	}
-	
+
 
 	// Now mark bad learnt clauses as deleted
-	
+
 	for (size_t i = 0; i < iLastExcl; ++i)
 	{
 		const TUInd clsInd = learnts[i];
@@ -441,20 +367,23 @@ void CTopi::DeleteClausesIfRequired()
 		assert(ClsGetIsLearnt(clsInd));
 
 		DeleteCls(clsInd);
-		if (unlikely(m_FirstLearntClsInd == ClsEnd(clsInd)))
+		if constexpr (!Compress)
 		{
-			m_FirstLearntClsInd = ClsEnd(clsInd);
-			while (m_FirstLearntClsInd < m_BNext && (ClsChunkDeleted(m_FirstLearntClsInd) || !ClsGetIsLearnt(m_FirstLearntClsInd)))
+			if (unlikely(m_FirstLearntClsInd == ClsEnd(clsInd)))
 			{
-				m_FirstLearntClsInd = ClsEnd(m_FirstLearntClsInd);
+				m_FirstLearntClsInd = ClsEnd(clsInd);
+				while (m_FirstLearntClsInd < m_BNext && (ClsChunkDeleted(m_FirstLearntClsInd) || !ClsGetIsLearnt(m_FirstLearntClsInd)))
+				{
+					m_FirstLearntClsInd = ClsEnd(m_FirstLearntClsInd);
+				}
+				assert(m_FirstLearntClsInd >= m_BNext || ClsGetIsLearnt(m_FirstLearntClsInd));
 			}
-			assert(m_FirstLearntClsInd >= m_BNext || ClsGetIsLearnt(m_FirstLearntClsInd));
 		}
 	}
-
 }
 
-void CTopi::SimplifyIfRequired()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 {
 	if (m_DecLevel > m_DecLevelOfLastAssignedAssumption || m_TrailLastVarPerDecLevel[0] == m_LastGloballySatisfiedLitAfterSimplify || m_ImplicationsTillNextSimplify > 0 || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)
 	{
@@ -464,7 +393,7 @@ void CTopi::SimplifyIfRequired()
 	assert(NV(1) || P("Simplification started\n"));
 	assert(NV(2) || P("The trail: " + STrail() + "\n"));
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 
@@ -473,9 +402,12 @@ void CTopi::SimplifyIfRequired()
 		m_LastGloballySatisfiedLitAfterSimplify = m_TrailLastVarPerDecLevel[0];
 		m_ImplicationsTillNextSimplify = (int64_t)m_Stat.GetActiveLongClsLen();
 		++m_Stat.m_Simplifies;
-		if (unlikely(m_FirstLearntClsInd != numeric_limits<decltype(m_FirstLearntClsInd)>::max() && m_FirstLearntClsInd >= m_BNext))
+		if constexpr (!Compress)
 		{
-			m_FirstLearntClsInd = numeric_limits<decltype(m_FirstLearntClsInd)>::max();
+			if (unlikely(m_FirstLearntClsInd != numeric_limits<decltype(m_FirstLearntClsInd)>::max() && m_FirstLearntClsInd >= m_BNext))
+			{
+				m_FirstLearntClsInd = numeric_limits<decltype(m_FirstLearntClsInd)>::max();
+			}
 		}
 
 		assert(NV(1) || P("Simplification finished\n"));
@@ -486,7 +418,7 @@ void CTopi::SimplifyIfRequired()
 			m_ReuseTrail.clear();
 		}
 
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 	});
@@ -504,7 +436,7 @@ void CTopi::SimplifyIfRequired()
 		// Visited will contain all the globally assigned variables
 		for (TUVar currV = m_TrailLastVarPerDecLevel[0]; currV != BadUVar; currV = GetTrailPrevVar(currV))
 		{
-			MarkVisitedVar(currV);			
+			MarkVisitedVar(currV);
 		}
 
 		// Sorting the visited, so that m_VisitedVars.back() would have the smallest globaly assigned variable index 
@@ -544,14 +476,14 @@ void CTopi::SimplifyIfRequired()
 			}
 		}
 
-		if (m_ParamCustomBtStrat > 0 && m_BestScorePerDecLevel.cap() != 0)
+		if (m_CurrCustomBtStrat > 0 && m_BestScorePerDecLevel.cap() != 0)
 		{
 			if (m_ParamSimplifyGlobalLevelScoreStrat == 0)
 			{
 				m_BestScorePerDecLevel[0] = m_VsidsHeap.get_var_score(globallySatifiedVarLowestIndex);
 			}
 			else if (m_ParamSimplifyGlobalLevelScoreStrat == 1)
-			{				
+			{
 				m_BestScorePerDecLevel[0] = CalcMinDecLevelScore(0);
 				m_VsidsHeap.set_var_score(globallySatifiedVarLowestIndex, m_BestScorePerDecLevel[0]);
 			}
@@ -582,16 +514,30 @@ void CTopi::SimplifyIfRequired()
 	};
 
 	// Go over the clause buffer
-		// Delete globally falsified literals (that is, mark them for deletion for the garbage collector)
-		// Delete globally satisfied clauses (that is, mark them for deletion for the garbage collector)
-		// Move watches to the earliest satisfied literals for clauses satisfied by assumptions
-		// Sift assumption-falsified literals towards the end of the clause in clauses, which are not satisfied
-		// Sift variable indices, if required
-	TUInd nextClsInd = BadClsInd;
-	for (TUInd clsInd = LitsInPage; clsInd < m_BNext; clsInd = nextClsInd)
-	{
-		nextClsInd = ClsEnd(clsInd);
+	// Delete globally falsified literals (that is, mark them for deletion for the garbage collector)
+	// Delete globally satisfied clauses (that is, mark them for deletion for the garbage collector)
+	// Move watches to the earliest satisfied literals for clauses satisfied by assumptions
+	// Sift assumption-falsified literals towards the end of the clause in clauses, which are not satisfied
+	// Sift variable indices, if required
 
+
+	unordered_set<TUInd> bcClssSimplifiedAndMovedToNewBuffer;
+	for (TUInd clsInd = ClsLoopFirst(false); !ClsLoopCompleted(); clsInd = ClsLoopNext())
+	{
+		if constexpr (Compress)
+		{
+			if (bcClssSimplifiedAndMovedToNewBuffer.find(clsInd) != bcClssSimplifiedAndMovedToNewBuffer.end())
+			{
+				assert(NV(2) || P("New clause " + HexStr(clsInd) + " skipped, since had just been moved to this buffer: " + SLits(Cls(clsInd)) + "\n"));
+				continue;
+			}
+		}
+#ifdef _DEBUG
+		CApplyFuncOnExitFromScope<> onExit([&]()
+		{
+			assert(NV(2) || P("m_BWasted = 0x" + HexStr(m_BWasted) + "\n"));
+		});
+#endif
 		bool isGloballySatisfied = false;
 		TUV globallyFalsifiedLitsNum = 0;
 		bool isAssumpSatisfied = false;
@@ -599,18 +545,21 @@ void CTopi::SimplifyIfRequired()
 
 		if (ClsChunkDeleted(clsInd))
 		{
-			if (unlikely(m_FirstLearntClsInd == clsInd))
+			if constexpr (!Compress)
 			{
-				m_FirstLearntClsInd = nextClsInd;
+				if (unlikely(m_FirstLearntClsInd == clsInd))
+				{
+					m_FirstLearntClsInd = ClsEnd(clsInd);
+				}
 			}
 
-			assert(NV(2) || P("\tChunk of size " + to_string(ClsGetSize(clsInd)) + " at " + to_string(clsInd) + " deleted!\n"));
+			assert(NV(2) || P("\tChunk at " + HexStr(clsInd) + " deleted!\n"));
 			continue;
 		}
 
-		assert(NV(2) || P("New clause: " + SLits(Cls(clsInd)) + "\n"));
+		assert(NV(2) || P("New clause " + HexStr(clsInd) + ": " + SLits(Cls(clsInd)) + "\n"));
 
-		span<TULit> cls = Cls(clsInd);
+		auto cls = Cls(clsInd);
 		// Binary clauses are inlined into WL's
 		assert(cls.size() > 2);
 		// Both the watches cannot be falsified, since there is no conflict now
@@ -706,27 +655,73 @@ void CTopi::SimplifyIfRequired()
 				}
 			}
 
-			// remove_if sifts the globally falsified literals towards the end of the clause, which is exactly what we need!
+			// remove_if makes sure globally falsified literals are no longer part of the beginning of the clause, which is exactly what we need!
 			[[maybe_unused]] auto itEndRemaining = remove_if(cls.begin() + 2, cls.end(), [&](TULit l) { return IsGloballyFalsified(l); });
-			// Resizing our clause
-			ClsSetSize(clsInd, (TUV)cls.size() - globallyFalsifiedLitsNum);
-			// Renewing the span
-			cls = Cls(clsInd);
 
-			assert(NV(2) || P("\tAfter removing the globally falsified literals: " + SLits(cls) + "\n"));
-
-			// Creating a deleted chunk out of the removed literals			
-			const TUInd deletedChunkInd = ClsEnd(clsInd);
-			const auto deletedChunkSize = globallyFalsifiedLitsNum - 1;
-			m_B[deletedChunkInd] = deletedChunkSize;
-			assert(ClsGetSize(deletedChunkInd) == deletedChunkSize);
-			assert(!ClsGetIsLearnt(deletedChunkInd));
-			if (deletedChunkSize > 2)
+			if constexpr (!Compress)
 			{
-				m_B[deletedChunkInd + 2] = BadULit;
+				// Resizing our clause
+				ClsSetSize(clsInd, (TUV)cls.size() - globallyFalsifiedLitsNum);
+				// Renewing the span
+				cls.Update();
+				assert(NV(2) || P("\tAfter removing the globally falsified literals: " + SLits(cls) + "\n"));
+
+				// Creating a deleted chunk out of the removed literals			
+				const TUInd deletedChunkInd = ClsEnd(clsInd);
+				const auto deletedChunkSize = globallyFalsifiedLitsNum - 1;
+				m_B[deletedChunkInd] = deletedChunkSize;
+				assert(ClsGetSize(deletedChunkInd) == deletedChunkSize);
+				assert(!ClsGetIsLearnt(deletedChunkInd));
+				if (deletedChunkSize > 2)
+				{
+					m_B[deletedChunkInd + 2] = BadULit;
+				}
+				// Updating the number of literal in long clauses
+				RecordDeletedLitsFromCls(globallyFalsifiedLitsNum);
 			}
-			// Updating the number of literal in long clauses
-			RecordDeletedLitsFromCls(globallyFalsifiedLitsNum);
+			else
+			{
+				// Updating the number of literal in long clauses
+				RecordDeletedLitsFromCls(globallyFalsifiedLitsNum, ((TBCInd)clsInd).GetHashId().m_BitsForLit);
+
+				const auto oldClsInd = clsInd;
+				auto [deletionHandled, spareUsed] = BCDeleteLitsByMovingToOtherBufferIfRequiredAssumingLastDeleted(clsInd, (TUV)cls.size(), globallyFalsifiedLitsNum, true);
+				if (!deletionHandled)
+				{
+					for (auto it = cls.begin() + (cls.size() - globallyFalsifiedLitsNum); it != cls.end(); ++it)
+					{
+						*it = BadULit;
+					}
+					assert(NV(2) || P("\tCompressed: after removing the globally falsified literals: " + SLits(cls) + "\n"));
+					ClsSetSize(clsInd, (TUV)cls.size() - globallyFalsifiedLitsNum);
+					cls.Update();
+				}
+				else
+				{
+					if (unlikely(spareUsed))
+					{
+						const TBCInd bcInd = clsInd;
+						const TBCHashId bcHashInd = bcInd.GetHashId();
+						cls = CCompressedCls(m_BCSpare.at(bcHashInd), bcInd);
+					}
+					else
+					{
+						cls = Cls(clsInd);
+					}
+					
+					bcClssSimplifiedAndMovedToNewBuffer.insert(clsInd);
+					for (uint8_t currWatchI = 0; currWatchI <= 1; ++currWatchI)
+					{
+						const TULit l = cls[currWatchI];
+						const TUVar v = GetVar(l);
+						if (m_VarInfo[v].m_ParentClsInd == oldClsInd)
+						{
+							m_VarInfo[v].m_ParentClsInd = clsInd;
+						}
+					}
+					//assert(NV(2) || P("\tCompressed: deletion handled by moving the updated clause to another buffer: " + SLits(Cls(clsInd)) + "\n"));
+				}
+			}
 		}
 
 		if (isAssumpSatisfied)
@@ -799,6 +794,16 @@ void CTopi::SimplifyIfRequired()
 		}
 	}
 
+	if constexpr (Compress)
+	{
+		if (m_BCSpare.size() != 0)
+		{
+			// Moving any entries from the spare clause buffer to the real one
+			m_BC.insert(make_move_iterator(m_BCSpare.begin()), make_move_iterator(m_BCSpare.end()));
+			m_BCSpare.clear();
+		}		
+	}
+
 	// Go over the watches: delete satisfied clauses
 	// Remove the globally satisfied variables, except for one and reuse their numbers by other variables. 
 	// One globally satisfied variable is still required to map globally satisfied external variables into it.
@@ -815,7 +820,7 @@ void CTopi::SimplifyIfRequired()
 		{
 			// There should be no long watches for the globally satisfied literal
 			assert(wi.m_LongWatches == 0);
-			const span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+			const TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				if (!IsGloballyAssignedVar(GetVar(secondLit)))
@@ -844,7 +849,7 @@ void CTopi::SimplifyIfRequired()
 			wiNeg.m_BinaryWatches = wiNeg.m_AllocatedEntries = 0;
 		}
 	}
-	
+
 	assert((binClssCountTwice & (size_t)1) == 0);
 	m_Stat.DeleteBinClauses(binClssCountOnce + binClssCountTwice / 2);
 
@@ -855,11 +860,11 @@ void CTopi::SimplifyIfRequired()
 		assert(!IsGloballyAssignedVar(GetVar(l)));
 
 		TWatchInfo& wi = m_Watches[l];
-		span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+		TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 
 		auto itEndRemaining = remove_if(binWatches.begin(), binWatches.end(), [&](TULit otherLit) { return IsGloballySatisfied(otherLit); });
 		assert(binWatches.end() - itEndRemaining != 0);
-		wi.m_BinaryWatches = itEndRemaining - binWatches.begin();
+		wi.m_BinaryWatches = (TUInd)(itEndRemaining - binWatches.begin());
 	};
 
 	for (TUVar varOfPositiveLit : m_VisitedVars.get_span())
@@ -922,7 +927,7 @@ void CTopi::SimplifyIfRequired()
 			{
 				continue;
 			}
-			const span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+			const TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				IsNeg(secondLit) ? MarkRooted(secondLit) : MarkVisited(secondLit);
@@ -930,7 +935,7 @@ void CTopi::SimplifyIfRequired()
 			for (auto [currLongWatchInd, currLongWatchPtr] = make_pair((size_t)0, m_W.get_ptr(wi.m_WBInd)); currLongWatchInd < wi.m_LongWatches; ++currLongWatchInd, currLongWatchPtr += TWatchInfo::BinsInLong)
 			{
 				const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);
-				span<TULit> cls = Cls(clsInd);
+				const auto cls = ConstClsSpan(clsInd, 2);
 				assert(cls[0] == l || cls[1] == l);
 				const TULit secondLit = cls[cls[0] == l];
 				IsNeg(secondLit) ? MarkRooted(secondLit) : MarkVisited(secondLit);
@@ -941,7 +946,7 @@ void CTopi::SimplifyIfRequired()
 	auto SiftLitsInWatches = [&](TULit l)
 	{
 		const TWatchInfo& wi = m_Watches[l];
-		span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+		TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 		transform(binWatches.begin(), binWatches.end(), binWatches.begin(), [&](TULit secondLit)
 		{
 			return RetSiftedLit(secondLit);
@@ -983,11 +988,21 @@ void CTopi::SimplifyIfRequired()
 			else if (m_VarInfo[v].m_ParentClsInd != BadClsInd && ClsChunkDeleted(m_VarInfo[v].m_ParentClsInd))
 			{
 				m_AssignmentInfo[v].m_IsAssignedInBinary = true;
-				span<TULit> cls = Cls(m_VarInfo[v].m_ParentClsInd);
-				assert(cls.size() >= 3);
-				assert(cls[1] == BadULit);
-				assert(GetVar(cls[0]) == v || GetVar(cls[2]) == v);
-				m_VarInfo[v].m_BinOtherLit = GetVar(cls[0]) == v ? cls[2] : cls[0];
+				assert(ClsGetSize(m_VarInfo[v].m_ParentClsInd) >= 3);
+				const auto cls = ConstClsSpan(m_VarInfo[v].m_ParentClsInd, 3);
+				assert(NV(2) || P("Var; parent cls: " + to_string(v) + " " + HexStr(m_VarInfo[v].m_ParentClsInd) + ": " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
+				if constexpr (Compress)
+				{
+					assert(cls[0] == BadULit);
+					assert(GetVar(cls[1]) == v || GetVar(cls[2]) == v);
+					m_VarInfo[v].m_BinOtherLit = GetVar(cls[1]) == v ? cls[2] : cls[1];
+				}
+				else
+				{
+					assert(cls[1] == BadULit);
+					assert(GetVar(cls[0]) == v || GetVar(cls[2]) == v);
+					m_VarInfo[v].m_BinOtherLit = GetVar(cls[0]) == v ? cls[2] : cls[0];
+				}
 			}
 		}
 	}
@@ -995,7 +1010,7 @@ void CTopi::SimplifyIfRequired()
 	// Handle the assumptions
 	if (!m_Assumps.cap() == 0)
 	{
-		span<TULit> assumpSpan = m_Assumps.get_span_cap();
+		TSpanTULit assumpSpan = m_Assumps.get_span_cap();
 
 		assert(all_of(assumpSpan.begin(), assumpSpan.end(), [&](TULit assumpLit) { return !IsFalsified(assumpLit); }));
 
@@ -1039,24 +1054,55 @@ void CTopi::SimplifyIfRequired()
 	assert(NV(1) || P("Finished renaming globally satisfied literals, but one\n"));
 }
 
-bool CTopi::DebugAssertWaste()
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::DebugAssertWaste()
 {
+	assert(NV(2) || P("DebugAssertWaste\n"));
 	TUInd w = 0;
 
-	for (TUInd clsInd = LitsInPage; clsInd < m_BNext; clsInd = ClsEnd(clsInd))
+	for (TUInd clsInd = ClsLoopFirst(false); !ClsLoopCompleted(); clsInd = ClsLoopNext())
 	{
+		CApplyFuncOnExitFromScope<> onExit([&]()
+		{
+			//assert(NV(2) || P("w = 0x" + HexStr(w) + "\n"));
+		});
+
 		if (ClsChunkDeleted(clsInd))
 		{
-			const auto sz = ClsGetSize(clsInd);
-			w += (sz + 1);
+			assert(NV(2) || P("Chunk " + HexStr(clsInd) + " was deleted!\n"));
+			if constexpr (Compress)
+			{
+				const TBCInd bcInd = clsInd;
+				const TBCHashId bcHashInd = bcInd.GetHashId();
+				const auto& ba = BCGetBitArrayConst(bcHashInd);
+				if (bcHashInd.m_BitsForClsSize != 0 && ba.bit_get(bcInd.m_BitStart, bcInd.m_BitsForClsSize) == 0)
+				{
+					assert(ba.bit_get(bcInd.m_BitStart, bcInd.m_BitsForLit) == 0);
+					w += bcInd.m_BitsForLit;
+					assert(NV(2) || P("Lit --> w = 0x" + HexStr(w) + "\n"));
+				}
+				else
+				{
+					assert(ba.bit_get(bcInd.BitFirstLit(), bcInd.m_BitsForLit) == 0);
+					w += bcHashInd.GetFirstLitOffset() + bcHashInd.m_BitsForLit * ClsGetSize(clsInd);
+					assert(NV(2) || P("Cls --> w = 0x" + HexStr(w) + "\n"));
+				}
+			}
+			else
+			{
+				const auto sz = ClsGetSize(clsInd);
+				w += (sz + 1);
+			}
 		}
 	}
+
 	assert(m_BWasted == w);
 
 	return true;
 }
 
-void CTopi::CompressWLs()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::CompressWLs()
 {
 	// Save aside the two initial watch entries for every literal l
 	// and place log2(allocated) && l to be able to, respectively: (1) Skip to the next chunk during compression; 
@@ -1107,8 +1153,8 @@ void CTopi::CompressWLs()
 		}
 	}
 
-	// Compress the watch buffer
-	m_W.Compress(LitsInPage, m_WNext, [&](TUInd wlInd)
+	// Remove garbage from the the watch buffer
+	m_W.template RemoveGarbage<TUInd>(LitsInPage, m_WNext, [&](TUInd wlInd)
 	{
 		return WLChunkDeleted(wlInd);
 	}, [&](TUInd wlInd)
@@ -1124,25 +1170,27 @@ void CTopi::CompressWLs()
 		m_Watches[l].m_WBInd = newWlInd;
 	});
 
-	if (m_ParamReduceBuffersSizeAfterCompression && m_W.cap() > (size_t)((double)m_WNext * m_ParamMultWatches))
+	if (m_W.cap() > (size_t)((double)m_WNext * m_ParamMultWatches))
 	{
 		m_W.reserve_exactly((size_t)((double)m_WNext * m_ParamMultWatches));
 		if (unlikely(IsUnrecoverable())) return;
 	}
-
+	m_WWasted = 0;
 }
 
-void CTopi::CompressBuffersIfRequired()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::CompressBuffersIfRequired()
 {
-	if ((double)m_BWasted / (double)m_BNext <= m_ParamWastedFractionThrToDelete || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)
+	double nextBitOverall(Compress ? (double)BCNextBitSum() : (double)m_BNext);
+	if ((double)m_BWasted / nextBitOverall <= m_ParamWastedFractionThrToDelete || IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)
 	{
 		return;
 	}
 
-	assert(NV(1) || P("Compression started: wasted fraction is " + to_string((double)m_BWasted / (double)m_BNext) + " > " + to_string(m_ParamWastedFractionThrToDelete) + "\n"));
+	assert(NV(1) || P("Compression started: wasted fraction is " + to_string((double)m_BWasted / (double)nextBitOverall) + " > " + to_string(m_ParamWastedFractionThrToDelete) + "\n"));
 	assert(NV(2) || P("The trail: " + STrail() + "\n"));
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 
@@ -1150,41 +1198,53 @@ void CTopi::CompressBuffersIfRequired()
 	// Compress the clause buffer
 	// ************************************	
 
-	[[maybe_unused]] const auto nextBefore = m_BNext;
-
 	const bool isAboveGlobalDecLevel = m_DecLevel != 0;
-	m_B.Compress(LitsInPage, m_BNext, [&](TUInd clsInd) { return ClsChunkDeleted(clsInd); }, [&](TUInd clsInd) { return ClsEnd(clsInd); }, [&](TUInd oldWlInd, TUInd newWlInd)
+	auto NotifyAboutRemainingChunkMove = [&](auto oldInd, auto newInd)
 	{
 		if (isAboveGlobalDecLevel)
 		{
 			auto UpdateParentIfRequired = [&](TULit l)
 			{
 				const TUVar v = GetVar(l);
-				const bool isCurrClsParent = IsAssignedVar(v) && !m_AssignmentInfo[v].IsAssignedBinary() && m_VarInfo[v].m_ParentClsInd == oldWlInd;
+				const bool isCurrClsParent = IsAssignedVar(v) && !m_AssignmentInfo[v].IsAssignedBinary() && m_VarInfo[v].m_ParentClsInd == oldInd;
 				if (isCurrClsParent)
 				{
-					m_VarInfo[v].m_ParentClsInd = newWlInd;
+					m_VarInfo[v].m_ParentClsInd = newInd;
 				}
 			};
 
-			span<TULit> cls = Cls(oldWlInd);
+			const auto cls = ConstClsSpan(oldInd, 2);
 			UpdateParentIfRequired(cls[0]);
 			UpdateParentIfRequired(cls[1]);
 		}
 
-		if (unlikely(m_FirstLearntClsInd == oldWlInd))
+		if constexpr (!Compress)
 		{
-			m_FirstLearntClsInd = newWlInd;
+			if (unlikely(m_FirstLearntClsInd == oldInd))
+			{
+				m_FirstLearntClsInd = newInd;
+			}
 		}
-	});
+	};
 
-
-	assert(nextBefore - m_BWasted == m_BNext);
-	m_BWasted = 0;
-	if (m_ParamReduceBuffersSizeAfterCompression && m_B.cap() > (size_t)((double)m_BNext * m_ParamMultClss))
+	if constexpr (!Compress)
 	{
-		m_B.reserve_exactly((size_t)((double)m_BNext * m_ParamMultClss));
-		if (unlikely(IsUnrecoverable())) return;
+		[[maybe_unused]] const auto nextBefore = m_BNext;
+
+		m_B.template RemoveGarbage<TUInd>(LitsInPage, m_BNext, [&](TUInd clsInd) { return ClsChunkDeleted(clsInd); }, [&](TUInd clsInd) { return ClsEnd(clsInd); }, NotifyAboutRemainingChunkMove);
+
+		assert(nextBefore - m_BWasted == m_BNext);
+		m_BWasted = 0;
+		if (m_B.cap() > (size_t)((double)m_BNext * m_ParamMultClss))
+		{
+			m_B.reserve_exactly((size_t)((double)m_BNext * m_ParamMultClss));
+			if (unlikely(IsUnrecoverable())) return;
+		}
+	}
+	else
+	{
+		BCRemoveGarbage(NotifyAboutRemainingChunkMove);
+		m_BWasted = 0;
 	}
 
 	// ************************************
@@ -1205,7 +1265,7 @@ void CTopi::CompressBuffersIfRequired()
 
 	auto AddLongWatchLocal = [&](bool watchInd, TUInd clsInd)
 	{
-		const span<TULit> cls = Cls(clsInd);
+		const auto cls = ConstClsSpan(clsInd, 2);
 		const TULit currLit = cls[watchInd];
 		const TULit inlinedLit = cls[!watchInd];
 		TWatchInfo& wi = m_Watches[currLit];
@@ -1216,8 +1276,11 @@ void CTopi::CompressBuffersIfRequired()
 		++wi.m_LongWatches;
 	};
 
-	for (TUInd clsInd = LitsInPage; clsInd < m_BNext; clsInd = ClsEnd(clsInd))
+	assert(NV(2) || P("Going over all the clauses after compression to repopulate the watch lists\n"));
+	for (TUInd clsInd = ClsLoopFirst(false); !ClsLoopCompleted(); clsInd = ClsLoopNext())
 	{
+		//assert(NV(2) || ClsChunkDeleted(clsInd) ? P("Chunk " + HexStr(clsInd) + " was deleted!\n") : P("Clause " + HexStr((TUInd)clsInd) + ": " + SLits(Cls(clsInd)) + "\n"));
+		assert(!ClsChunkDeleted(clsInd));
 		// Note that we cannot because of correctness (and also should not because of efficiency) use the standard
 		// WLAddLongWatch procedure, since the number of long watches doesn't change
 		AddLongWatchLocal(false, clsInd);
@@ -1226,7 +1289,7 @@ void CTopi::CompressBuffersIfRequired()
 
 	CompressWLs();
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
 
@@ -1234,3 +1297,6 @@ void CTopi::CompressBuffersIfRequired()
 	assert(NV(2) || P("The trail: " + STrail() + "\n"));
 }
 
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

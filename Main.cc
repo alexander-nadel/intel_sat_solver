@@ -12,6 +12,7 @@
 #include <cstring>
 #include <iterator>
 #include <cstdio>
+#include <unordered_set>
 #include <type_traits>
 
 #ifdef __CYGWIN__
@@ -101,8 +102,10 @@ static array<pair<string, string>, U(TArchiveFileType::None)> commandStringBefor
 };
 
 static constexpr int BadRetVal = -1;
+using TLit = int32_t;
 
-int OnFinishingSolving(CTopor& topor, TToporReturnVal ret, bool printModel)
+template <typename TTopor>
+int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, vector<TLit>* varsToPrint = nullptr)
 {
 	CApplyFuncOnExitFromScope<> printStatusExplanation([&]() 
 	{ 
@@ -119,13 +122,29 @@ int OnFinishingSolving(CTopor& topor, TToporReturnVal ret, bool printModel)
 		cout << "s SATISFIABLE" << endl;
 		if (printModel)
 		{
-			cout << "v";
-			for (TLit v = 1; v <= topor.GetStatistics().m_MaxUserVar; ++v)
+			auto PrintVal = [&](TLit v)
 			{
 				const auto vVal = topor.GetLitValue(v);
 				assert(vVal != TToporLitVal::VAL_UNASSIGNED);
 				cout << " " << (vVal != TToporLitVal::VAL_UNSATISFIED ? v : -v);
+			};
+
+			cout << "v";
+			if (!varsToPrint)
+			{
+				for (TLit v = 1; v <= topor.GetStatistics().m_MaxUserVar; ++v)
+				{
+					PrintVal(v);
+				}
 			}
+			else
+			{
+				for (auto v : *varsToPrint)
+				{
+					PrintVal(v);
+				}
+			}
+			
 			cout << " 0" << endl;
 		}
 		return 10;
@@ -165,6 +184,8 @@ int OnFinishingSolving(CTopor& topor, TToporReturnVal ret, bool printModel)
 	}
 }
 
+
+
 int main(int argc, char** argv)
 {
 	if (argc == 1 || strcmp(argv[1], "-help") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)
@@ -179,15 +200,20 @@ int main(int argc, char** argv)
 		cout << "\tc oc <ConflictThreshold>" << endl;
 		cout << "\tc lb <BoostScoreLit> <Mult>" << endl;
 		cout << "\tc lf <FixPolarityLit> <OnlyOnce>" << endl;
+		cout << "\tc ll <LitToCreateInternalLit>" << endl;
 		cout << "\tc lc <ClearUserPolarityInfoLit>" << endl;
 		cout << "\tc b <BacktrackLevel>" << endl;
 		cout << "\tc s <Lit1 <Lit2> ... <Litn>: solve under the assumptions {<Lit1 <Lit2> ... <Litn>}" << endl;		
 		cout << "\tc The solver parses the p cnf vars clss line, but it ignores the number of clauses and uses the number of variables as a non-mandatory hint" << endl;
 		cout << print_as_color <ansi_color_code::red>("c Intel(R) SAT Solver executable parameters:") << endl;
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/solver_mode") << " : enum (0, 1, or 2); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "what type of solver to use in terms of clause buffer indexing and compression: 0 -- 32-bit index, uncompressed, 1 -- 64-bit index, uncompressed, 2 -- 64-bit index, bit-array compression \n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/bin_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a binary DRAT proof\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/text_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a text DRAT proof (if more than one /topor_tool/bin_drat_file and /topor_tool/text_drat_file parameters provided, only the last one is applied, rest are ignored)\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the models for satisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the models for satisfiable invocations?\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_models_number") << " : unsigned long integer; default = 1" << print_as_color<ansi_color_code::green>("1") << " : " << "the maximal number of models for AllSAT. AllSAT with blocking clauses over /topor_tool/allsat_blocking_variables's variables is invoked if: (1) this parameter is greater than 1; (2) the CNF format is DIMACS without Topor-specific commands; (3) /topor_tool/allsat_blocking_variables is non-empty\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "if /topor_tool/allsat_models_number > 1, specifies the variables which will be used for blocking clauses, sperated by a comma, e.g., 1,4,5,6,7,15.\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables_file_alg") << " : string; default = " << print_as_color<ansi_color_code::green>("3") << " : " << "if /topor_tool/allsat_models_number > 1 and our parameter > 0, read the blocking variables from the first comment line in the file (format: c 1,4,5,6,7,15), where the value means: 1 -- assign lowest internal SAT variables to blocking; 2 -- assign highest internal SAT variables to blocking; >=3 -- assign their own internal SAT variables to blocking \n";
 
 		CTopor topor;
 		cout << topor.GetParamsDescr();
@@ -206,111 +232,12 @@ int main(int argc, char** argv)
 	string dratName("");
 	bool printModel = true;
 	bool verifyModel = false;
-
-	auto ParseParameters = [&](CTopor& topor)
-	{
-		// Parse parameters
-		for (int currArgNum = 2; currArgNum < argc; currArgNum += 2)
-		{			
-			const string paramNameStr = (string)argv[currArgNum];
-			const string paramValStr = (string)argv[currArgNum + 1];
-
-			auto ReadBoolParam = [&](string& errMsg)
-			{
-				int intVal = 0;
-				stringstream ss;
-				try
-				{
-					intVal = stoi(paramValStr);
-				}
-				catch (...)
-				{
-					ss << "c ERROR: couldn't convert " << paramValStr << " to an integer" << endl;					
-				}
-
-				if (intVal != 0 && intVal != 1)
-				{
-					ss << "c ERROR: " << paramValStr << " must be 0 or 1" << endl;					
-				}
-
-				errMsg = move(ss.str());
-
-				return (bool)intVal;
-			};
-
-			// /topor_tool/ prefix length
-			static constexpr size_t ttPrefixLen = 12;
-			if (paramNameStr.substr(0, ttPrefixLen) == "/topor_tool/")
-			{
-				const string param = paramNameStr.substr(ttPrefixLen, paramNameStr.size() - ttPrefixLen);
-				if (param == "bin_drat_file")
-				{
-					dratName = paramValStr;
-					isDratBinary = true;
-					cout << "c /topor_tool/bin_drat_file " << dratName << endl;
-				}
-				else if (param == "text_drat_file")
-				{
-					dratName = paramValStr;
-					isDratBinary = false;
-					cout << "c /topor_tool/text_drat_file " << dratName << endl;
-				}
-				else if (param == "print_model")
-				{
-					cout << "c /topor_tool/print_model " << paramValStr << endl;
-					string errMsg;
-					printModel = ReadBoolParam(errMsg);
-					if (!errMsg.empty())
-					{
-						cout << errMsg;
-						return true;
-					}
-				}
-				else if (param == "verify_model")
-				{
-					cout << "c /topor_tool/verify_model " << paramValStr << endl;
-					string errMsg;
-					verifyModel = ReadBoolParam(errMsg);
-					if (!errMsg.empty())
-					{
-						cout << errMsg;
-						return true;
-					}
-				}
-				else
-				{
-					cout << "c ERROR: unrecognized /topor_tool/ parameter: " << paramNameStr << endl;
-					return true;
-				}
-			}
-			else
-			{
-				auto [paramName, paramValue] = make_pair(paramNameStr, (double)0.0);
-
-				try
-				{
-					paramValue = std::stod(paramValStr);
-				}
-				catch (...)
-				{
-					cout << "c topor_tool ERROR: could not convert " << argv[currArgNum + 1] << " to double" << endl;
-					return true;
-				}
-
-				topor.SetParam(paramName, paramValue);
-				const bool isError = topor.IsError();							
-				if (isError)
-				{
-					const string errorDescr = topor.GetStatusExplanation();
-					cout << "c ERROR in Topor parameter: " << errorDescr << endl;
-					return true;
-				}
-			}
-			
-		}
-		return false;
-	};
-
+	unsigned long allsatModels = 0;
+	vector<TLit> blockingVars;
+	unsigned long allsatBlockingFromInstanceAlg = 3;
+	// 0: 32-bit clause buffer index; 1: 64-bit clause buffer index; 2: 64-bit clause buffer index & bit-array-compression
+	uint8_t type_indexing_and_compression = 0;
+	
 	/*
 	* Identify the input file type, read it, read the parameters too
 	*/
@@ -392,7 +319,95 @@ int main(int argc, char** argv)
 		return BadRetVal;
 	}
 
-	CTopor* topor = nullptr;
+	CTopor<int32_t, uint32_t, false>* topor32 = nullptr;
+	CTopor<int32_t, uint64_t, false>* topor64 = nullptr;
+	CTopor<int32_t, uint64_t, true>* toporc = nullptr;
+
+	auto AllToporsNull = [&] { return topor32 == nullptr && topor64 == nullptr && toporc == nullptr; };
+
+	auto ToporSetParam = [&](const std::string& paramName, double newVal)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->SetParam(paramName, newVal) : topor64 ? topor64->SetParam(paramName, newVal) : toporc->SetParam(paramName, newVal);
+	};
+
+	auto ToporIsError = [&]()
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->IsError() : topor64 ? topor64->IsError() : toporc->IsError();
+	};
+
+	auto ToporGetStatusExplanation = [&]()
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->GetStatusExplanation() : topor64 ? topor64->GetStatusExplanation() : toporc->GetStatusExplanation();
+	};
+
+	auto ToporDumpDrat = [&](std::ofstream& openedDratFile, bool isDratBinary)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->DumpDrat(openedDratFile, isDratBinary) : topor64 ? topor64->DumpDrat(openedDratFile, isDratBinary) : toporc->DumpDrat(openedDratFile, isDratBinary);
+	};
+
+	auto ToporGetLitValue = [&](TLit l)
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->GetLitValue(l) : topor64 ? topor64->GetLitValue(l) : toporc->GetLitValue(l);
+	};
+
+	auto ToporClearUserPolarityInfo = [&](TLit v)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->ClearUserPolarityInfo(v) : topor64 ? topor64->ClearUserPolarityInfo(v) : toporc->ClearUserPolarityInfo(v);
+	};
+
+	auto ToporFixPolarity = [&](TLit l, bool onlyOnce = false)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->FixPolarity(l, onlyOnce) : topor64 ? topor64->FixPolarity(l, onlyOnce) : toporc->FixPolarity(l, onlyOnce);
+	};
+
+	auto ToporCreateInternalLit = [&](TLit v)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->CreateInternalLit(v) : topor64 ? topor64->CreateInternalLit(v) : toporc->CreateInternalLit(v);
+	};
+	
+	auto ToporBoostScore = [&](TLit v, double value = 1.0)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->BoostScore(v, value) : topor64 ? topor64->BoostScore(v, value) : toporc->BoostScore(v, value);
+	};
+
+	auto ToporBacktrack = [&](TLit decLevel)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->Backtrack(decLevel) : topor64 ? topor64->Backtrack(decLevel) : toporc->Backtrack(decLevel);
+	};
+
+	auto ToporSolve = [&](const std::span<TLit> assumps = {}, std::pair<double, bool> toInSecIsCpuTime = std::make_pair((std::numeric_limits<double>::max)(), true), uint64_t confThr = (std::numeric_limits<uint64_t>::max)())
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->Solve(assumps, toInSecIsCpuTime, confThr) : topor64 ? topor64->Solve(assumps, toInSecIsCpuTime, confThr) : toporc->Solve(assumps, toInSecIsCpuTime, confThr);
+	};
+
+	auto ToporAddClause = [&](const std::span<TLit> c)
+	{
+		assert(!AllToporsNull());
+		topor32 ? topor32->AddClause(c) : topor64 ? topor64->AddClause(c) : toporc->AddClause(c);
+	};
+
+	auto ToporGetStatisticsSolveInst = [&]()
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->GetStatistics().m_SolveInvs : topor64 ? topor64->GetStatistics().m_SolveInvs : toporc->GetStatistics().m_SolveInvs;
+	};
+
+	auto ToporOnFinishedSolving = [&](TToporReturnVal ret, bool printModel, vector<TLit>& varsToPrint)
+	{
+		return topor32 ? OnFinishingSolving(*topor32, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : OnFinishingSolving(*toporc, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint);
+	};
+
 	TToporReturnVal ret = TToporReturnVal::RET_EXOTIC_ERROR;
 
 	ofstream dratFile;
@@ -413,7 +428,9 @@ int main(int argc, char** argv)
 				remove(dratName.c_str());
 			}
 		}
-		delete topor;		
+		delete topor32;
+		delete topor64;
+		delete toporc;
 	});
 
 	/*
@@ -430,17 +447,270 @@ int main(int argc, char** argv)
 	bool pLineRead = false;
 	int retValBasedOnLatestSolve = BadRetVal;
 
-	auto CreateToporInst = [&](TLit varsNumHint = 0)
+	auto ReadCommaSeparatedVarList = [&](string& errMsg, const string& s)
 	{
-		topor = new CTopor(varsNumHint);
-		if (topor == nullptr)
+		vector<TLit> varList;
+		stringstream ss;
+		try
 		{
-			cout << "c topor_tool ERROR: couldn't create Topor instance" << endl;
-			return BadRetVal;
+			stringstream ss(s); //create string stream from the string
+			while (ss.good())
+			{
+				string substr;
+				// Get first string delimited by comma
+				getline(ss, substr, ',');
+				TLit l = (TLit)stoll(substr);
+				if (l <= 0)
+				{
+					ss << "c ERROR: couldn't convert " << s << " to a variable list, since " << l << " is not a positive variable" << endl;
+				}
+				varList.push_back(l);
+			}
+		}
+		catch (...)
+		{
+			ss << "c ERROR: couldn't convert " << s << " to a variable list" << endl;
 		}
 
+		errMsg = move(ss.str());
+
+		return varList;
+	};
+
+
+	auto CreateToporInst = [&](TLit varsNumHint = 0)
+	{		
 		pLineRead = true;
-		if (ParseParameters(*topor)) return BadRetVal;
+
+		auto CreateToporsIfRequired = [&]()		
+		{
+			if (AllToporsNull())
+			{
+				if (type_indexing_and_compression == 2)
+				{
+					toporc = new CTopor<int32_t, uint64_t, true>(varsNumHint);
+				}
+				else if (type_indexing_and_compression == 1)
+				{
+					topor64 = new CTopor<int32_t, uint64_t, false>(varsNumHint);
+				}
+				else
+				{
+					topor32 = new CTopor<int32_t, uint32_t, false>(varsNumHint);
+				}
+			}
+		};
+
+		auto ParseParameters = [&]()
+		{
+			// Parse parameters
+			for (int currArgNum = 2; currArgNum < argc; currArgNum += 2)
+			{
+				const string paramNameStr = (string)argv[currArgNum];
+				const string paramValStr = (string)argv[currArgNum + 1];
+
+				auto ReadBoolParam = [&](string& errMsg)
+				{
+					int intVal = 0;
+					stringstream ss;
+					try
+					{
+						intVal = stoi(paramValStr);
+					}
+					catch (...)
+					{
+						ss << "c ERROR: couldn't convert " << paramValStr << " to an integer" << endl;
+					}
+
+					if (intVal != 0 && intVal != 1)
+					{
+						ss << "c ERROR: " << paramValStr << " must be 0 or 1" << endl;
+					}
+
+					errMsg = move(ss.str());
+
+					return (bool)intVal;
+				};
+
+				auto Read0to2Param = [&](string& errMsg)
+				{
+					int intVal = 0;
+					stringstream ss;
+					try
+					{
+						intVal = stoi(paramValStr);
+					}
+					catch (...)
+					{
+						ss << "c ERROR: couldn't convert " << paramValStr << " to an integer" << endl;
+					}
+
+					if (intVal != 0 && intVal != 1 && intVal != 2)
+					{
+						ss << "c ERROR: " << paramValStr << " must be 0 or 1 or 2" << endl;
+					}
+
+					errMsg = move(ss.str());
+
+					return (uint8_t)intVal;
+				};
+
+				auto ReadULongParam = [&](string& errMsg)
+				{
+					unsigned long ulVal = 0;
+					stringstream ss;
+					try
+					{
+						ulVal = stoul(paramValStr);
+					}
+					catch (...)
+					{
+						ss << "c ERROR: couldn't convert " << paramValStr << " to an unsigned long" << endl;
+					}
+
+					errMsg = move(ss.str());
+
+					return ulVal;
+				};
+				
+				// /topor_tool/ prefix length
+				static constexpr size_t ttPrefixLen = 12;
+				if (paramNameStr.substr(0, ttPrefixLen) == "/topor_tool/")
+				{
+					const string param = paramNameStr.substr(ttPrefixLen, paramNameStr.size() - ttPrefixLen);
+					if (param == "bin_drat_file")
+					{
+						dratName = paramValStr;
+						isDratBinary = true;
+						cout << "c /topor_tool/bin_drat_file " << dratName << endl;
+					}
+					else if (param == "text_drat_file")
+					{
+						dratName = paramValStr;
+						isDratBinary = false;
+						cout << "c /topor_tool/text_drat_file " << dratName << endl;
+					}
+					else if (param == "print_model")
+					{
+						cout << "c /topor_tool/print_model " << paramValStr << endl;
+						string errMsg;
+						printModel = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "verify_model")
+					{
+						cout << "c /topor_tool/verify_model " << paramValStr << endl;
+						string errMsg;
+						verifyModel = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "solver_mode")
+					{
+						cout << "c /topor_tool/solver_mode " << paramValStr << endl;
+						string errMsg;
+						type_indexing_and_compression = Read0to2Param(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+
+						if (!AllToporsNull())
+						{
+							cout << "c topor_tool ERROR: /topor_tool/solver_mode should be provided before any other parameters" << endl;
+							return true;
+						}
+					}
+					else if (param == "allsat_models_number")
+					{
+						cout << "c /topor_tool/allsat_models_number " << paramValStr << endl;
+						string errMsg;
+						allsatModels = ReadULongParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "allsat_blocking_variables")
+					{
+						cout << "c /topor_tool/allsat_blocking_variables " << paramValStr << endl;
+						string errMsg;
+						blockingVars = ReadCommaSeparatedVarList(errMsg, paramValStr);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "allsat_blocking_variables_file_alg")
+					{
+						cout << "c /topor_tool/allsat_blocking_variables_file_alg " << paramValStr << endl;
+						string errMsg;
+						allsatBlockingFromInstanceAlg = ReadULongParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else
+					{
+						cout << "c ERROR: unrecognized /topor_tool/ parameter: " << paramNameStr << endl;
+						return true;
+					}
+				}
+				else
+				{
+					CreateToporsIfRequired();					
+					if (AllToporsNull())
+					{
+						cout << "c topor_tool ERROR: couldn't create Topor instance" << endl;
+						return true;
+					}
+
+					auto [paramName, paramValue] = make_pair(paramNameStr, (double)0.0);
+
+					try
+					{
+						paramValue = std::stod(paramValStr);
+					}
+					catch (...)
+					{
+						cout << "c topor_tool ERROR: could not convert " << argv[currArgNum + 1] << " to double" << endl;
+						return true;
+					}
+
+					ToporSetParam(paramName, paramValue);
+					const bool isError = ToporIsError();
+					if (isError)
+					{
+						const string errorDescr = ToporGetStatusExplanation();
+						cout << "c ERROR in Topor parameter: " << errorDescr << endl;
+						return true;
+					}
+				}
+			}
+
+			CreateToporsIfRequired();
+			if (AllToporsNull())
+			{
+				cout << "c topor_tool ERROR: couldn't create Topor instance" << endl;
+				return true;
+			}
+
+			return false;
+		};
+
+		if (ParseParameters()) return BadRetVal;
 
 		if (dratName != "")
 		{
@@ -450,7 +720,7 @@ int main(int argc, char** argv)
 				cout << "c topor_tool ERROR: couldn't open DRAT file " << dratName << endl;
 				return BadRetVal;
 			}
-			topor->DumpDrat(dratFile, isDratBinary);
+			ToporDumpDrat(dratFile, isDratBinary);
 		}
 
 		return 0;
@@ -471,7 +741,7 @@ int main(int argc, char** argv)
 			{
 				if (a != 0)
 				{
-					TToporLitVal v = topor->GetLitValue(a);
+					TToporLitVal v = ToporGetLitValue(a);
 					if (v != TToporLitVal::VAL_SATISFIED && v != TToporLitVal::VAL_DONT_CARE)
 					{
 						cout << "c ERROR: assumptions " << a << " is not satisfied!" << endl;
@@ -488,7 +758,7 @@ int main(int argc, char** argv)
 			{
 				if (l != 0)
 				{
-					TToporLitVal v = topor->GetLitValue(l);
+					TToporLitVal v = ToporGetLitValue(l);
 					if (v == TToporLitVal::VAL_SATISFIED || v == TToporLitVal::VAL_DONT_CARE)
 					{
 						isVerified = true;
@@ -511,7 +781,7 @@ int main(int argc, char** argv)
 		return 10;
 	};
 
-	const size_t maxSz = (size_t)1 << 28;	
+	constexpr size_t maxSz = (size_t)1 << 28;	
 	char* line = (char*)malloc(maxSz);
 	if (line == nullptr)
 	{
@@ -524,12 +794,13 @@ int main(int argc, char** argv)
 #ifndef SKIP_ZLIB
 		return useZlib ? gzgets((gzFile)f, line, maxSz) : fgets(line, maxSz, f);
 #else
-		return fgets(line, maxSz, f);
+		return fgets(line, (int)maxSz, f);
 #endif
 	};
 
 	pair<double, bool> nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
 	uint64_t nextSolveConfThr = numeric_limits<uint64_t>::max();
+	TLit varsInPCnf = 0;
 
 	while (ReadLine(f, line, maxSz) != nullptr)
 	{
@@ -555,6 +826,36 @@ int main(int argc, char** argv)
 		if (line[currLineI] == 'c')
 		{
 			// A comment
+			if (allsatModels > 1 && allsatBlockingFromInstanceAlg > 0 && blockingVars.empty())
+			{
+				string errMsg, blockingVarsStr;
+				blockingVarsStr.assign(line + 2, line + strlen(line));
+				blockingVars = ReadCommaSeparatedVarList(errMsg, blockingVarsStr);
+				if (!errMsg.empty() || blockingVars.empty())
+				{
+					throw logic_error("c topor_tool ERROR: expected the first comment to contain blocking variables at line number " + to_string(lineNum) + ". Error message: " + errMsg);
+				}
+				
+				if (allsatBlockingFromInstanceAlg == 1)
+				{
+					for (TLit l : blockingVars)
+					{
+						ToporCreateInternalLit(l);
+					}
+				}
+
+				if (allsatBlockingFromInstanceAlg == 2)
+				{
+					unordered_set<TLit> blockingVarsSet(blockingVars.begin(), blockingVars.end());
+					for (TLit l = 1; l < varsInPCnf; ++l)
+					{
+						if (blockingVarsSet.find(l) == blockingVarsSet.end())
+						{
+							ToporCreateInternalLit(l);
+						}
+					}
+				}
+			}
 			continue;
 		}
 
@@ -581,7 +882,7 @@ int main(int argc, char** argv)
 				throw logic_error("c topor_tool ERROR: couldn't convert the parameter value to double at line number " + to_string(lineNum));
 			}
 			
-			topor->SetParam(paramName, paramValDouble);
+			ToporSetParam(paramName, paramValDouble);
 
 			continue;
 		}
@@ -696,7 +997,8 @@ int main(int argc, char** argv)
 			// cout << "\tc lb <BoostScoreLit> <Mult>" << endl;
 			// cout << "\tc lf <FixPolarityLit> <OnlyOnce>" << endl;
 			// cout << "\tc lc <ClearUserPolarityInfoLit>" << endl;
-			if (lStr[1] != 'b' && lStr[1] != 'f' && lStr[1] != 'c')
+			// cout << "\tc ll <LitToCreateInternalLit>" << endl;
+			if (lStr[1] != 'b' && lStr[1] != 'f' && lStr[1] != 'c' && lStr[1] != 'l')
 			{
 				throw logic_error("c topor_tool ERROR: The 2nd character must be either b or f or c at line number " + to_string(lineNum));
 			}
@@ -711,7 +1013,7 @@ int main(int argc, char** argv)
 
 			if (lStr[1] == 'c')
 			{
-				topor->ClearUserPolarityInfo(lit);
+				ToporClearUserPolarityInfo(lit);
 			}
 			else if (lStr[1] == 'f')
 			{
@@ -730,7 +1032,10 @@ int main(int argc, char** argv)
 				{
 					throw logic_error("c topor_tool ERROR: couldn't convert <FixPolarityLit> to 0 or 1 at line number " + to_string(lineNum));
 				}
-				topor->FixPolarity(lit, (bool)isOnlyOnce);
+				ToporFixPolarity(lit, (bool)isOnlyOnce);
+			} else if (lStr[1] == 'l')
+			{
+				ToporCreateInternalLit(lit);
 			}
 			else
 			{
@@ -747,7 +1052,7 @@ int main(int argc, char** argv)
 					throw logic_error("c topor_tool ERROR: couldn't convert the <Mult> value to double at line number " + to_string(lineNum));
 				}
 
-				topor->BoostScore(lit, mult);
+				ToporBoostScore(lit, mult);
 			}
 
 			continue;
@@ -764,7 +1069,7 @@ int main(int argc, char** argv)
 			++currLineI;
 			auto dl = ParseNumber();
 			
-			topor->Backtrack((TLit)dl);
+			ToporBacktrack((TLit)dl);
 
 			continue;
 		}
@@ -783,8 +1088,7 @@ int main(int argc, char** argv)
 			{
 				cout << "c topor_tool ERROR: couldn't parse the p-line as 'p cnf <VARS> <CLSS>' at line number " << lineNum << endl;
 				return BadRetVal;
-			}
-			TLit vars = 0;
+			}			
 
 			try
 			{
@@ -797,7 +1101,7 @@ int main(int argc, char** argv)
 				}
 				else
 				{
-					vars = (TLit)varsLL;
+					varsInPCnf = (TLit)varsLL;
 				}
 			}
 			catch (const logic_error& le)
@@ -818,8 +1122,8 @@ int main(int argc, char** argv)
 				return BadRetVal;
 			}
 
-			assert(topor == nullptr);
-			if (CreateToporInst(vars) == BadRetVal)
+			assert(AllToporsNull());
+			if (CreateToporInst(varsInPCnf) == BadRetVal)
 			{
 				return BadRetVal;
 			}
@@ -828,7 +1132,7 @@ int main(int argc, char** argv)
 		}
 
 		// If we're here and topor is still missing, create it without the number-of-variables hint -- no p-line is expected anymore
-		if (topor == nullptr)
+		if (AllToporsNull())
 		{
 			if (CreateToporInst() == BadRetVal)
 			{
@@ -881,11 +1185,12 @@ int main(int argc, char** argv)
 				return BadRetVal;
 			}
 
-			ret = topor->Solve(assumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
+			ret = ToporSolve(assumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
 			nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
 			nextSolveConfThr = numeric_limits<uint64_t>::max();
 
-			retValBasedOnLatestSolve = topor ? OnFinishingSolving(*topor, ret, printModel) : BadRetVal;
+			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal : 
+				topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
 
 			if (verifyModel && retValBasedOnLatestSolve == 10)
 			{
@@ -905,18 +1210,43 @@ int main(int argc, char** argv)
 		{
 			vmClss.push_back(cls);
 		}
-		topor->AddClause(cls);
+		ToporAddClause(cls);
 	}
 
 	free(line);
 	
-	if (topor && topor->GetStatistics().m_SolveInvs == 0)
+	if (!AllToporsNull() && ToporGetStatisticsSolveInst() == 0)
 	{
-		ret = topor->Solve();
-		retValBasedOnLatestSolve = OnFinishingSolving(*topor, ret, printModel);
+		ret = ToporSolve();
+		retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
 		if (verifyModel && retValBasedOnLatestSolve == 10)
 		{
 			if (VerifyModel() == BadRetVal) return BadRetVal;
+		}
+
+		if (allsatModels > 1 && !blockingVars.empty())
+		{
+			vector<TLit> cls;
+			
+			for (unsigned long currModelNum = 1; currModelNum < allsatModels && retValBasedOnLatestSolve == 10; ++currModelNum)
+			{
+				cout << "c topor_tool: before adding a blocking clause and calling the solver for time " << currModelNum + 1 << " out of " << allsatModels << endl;
+				cls.clear();
+				cls.reserve(blockingVars.size());
+				for (TLit v : blockingVars)
+				{
+					TToporLitVal toporLitVal = ToporGetLitValue(v);
+					assert(toporLitVal != TToporLitVal::VAL_UNASSIGNED);
+					cls.push_back(toporLitVal == TToporLitVal::VAL_SATISFIED ? -v : v);
+				}
+				ToporAddClause(cls);
+				ret = ToporSolve();
+				retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
+				if (verifyModel && retValBasedOnLatestSolve == 10)
+				{
+					if (VerifyModel() == BadRetVal) return BadRetVal;
+				}
+			}			
 		}
 	}
 

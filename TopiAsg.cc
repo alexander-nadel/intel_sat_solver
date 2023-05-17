@@ -11,7 +11,8 @@
 using namespace Topor;
 using namespace std;
 
-bool CTopi::DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd parentClsIndIfLong)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit,TUInd,Compress>::DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd parentClsIndIfLong)
 {
 	// Parent clause is well-defined
 	assert(parentClsIndIfLong != BadClsInd);
@@ -20,8 +21,8 @@ bool CTopi::DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd pare
 	// Implied literal is unassigned
 	assert(!IsAssigned(l));
 		
-	// Get the clause span
-	const span<TULit> cls = Cls(parentClsIndIfLong);
+	// Get the const clause span
+	const auto cls = ConstClsSpan(parentClsIndIfLong);
 	
 	// The implied literal l must be one of the first literals in the clause
 	const bool lOneOfFirstLits = l == cls[0] || l == cls[1];
@@ -35,13 +36,14 @@ bool CTopi::DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd pare
 	assert(decLevel == GetAssignedDecLevel(secondLit));
 
 	// The decision level of the implication is the highest in the clause
-	const auto highestNonWLDecLevel = GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2));
+	const auto highestNonWLDecLevel = GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt((span<TULit>)cls, 2));
 	assert(decLevel >= highestNonWLDecLevel);
 
 	return parentClsIndIfLong != BadClsInd && l != BadULit && !IsAssigned(l) && lOneOfFirstLits && IsFalsified(secondLit) && decLevel == GetAssignedDecLevel(secondLit) && decLevel >= highestNonWLDecLevel;
 }
 
-bool CTopi::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate)
 {
 	assert(parentClsInd == BadClsInd || DebugLongImplicationInvariantHolds(l, decLevel, parentClsInd));
 	++m_Stat.m_Assignments;
@@ -108,14 +110,14 @@ bool CTopi::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, 
 		m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;
 	}	
 
-	if (m_ParamCustomBtStrat > 0 && m_VsidsHeap.var_score_exists(v))
+	if (m_CurrCustomBtStrat > 0 && m_VsidsHeap.var_score_exists(v))
 	{
 		const auto currScore = m_VsidsHeap.get_var_score(v);
 
 		if (decLevel >= m_BestScorePerDecLevel.cap())
 		{
 			assert(decLevel <= GetNextVar());
-			ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_ParamCustomBtStrat in Assign");
+			ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_BestScorePerDecLevel in Assign");
 			if (unlikely(IsUnrecoverable())) return false;
 		}
 
@@ -124,14 +126,15 @@ bool CTopi::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, 
 			m_BestScorePerDecLevel[decLevel] = currScore;
 			assert(NV(2) || P("m_BestScorePerDecLevel[" + to_string(decLevel) + "] updated to " + to_string(currScore) + " in Assign\n"));
 		}		
-		assert(m_ParamAssertConsistency < 1 || CalcMaxDecLevelScore(decLevel) == m_BestScorePerDecLevel[decLevel]);
+		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || CalcMaxDecLevelScore(decLevel) == m_BestScorePerDecLevel[decLevel]);
 
 	}
 
 	return false;
 }
 
-void CTopi::UnassignVar(TUVar v, bool reuseTrail)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::UnassignVar(TUVar v, bool reuseTrail)
 {
 	assert(v < m_VarInfo.cap());
 	assert(m_AssignmentInfo[v].m_IsAssigned);
@@ -187,13 +190,15 @@ void CTopi::UnassignVar(TUVar v, bool reuseTrail)
 	--m_AssignedVarsNum;
 }
 
-void CTopi::Unassign(TULit l)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::Unassign(TULit l)
 {
 	const TUVar v = GetVar(l);	
 	UnassignVar(v);
 }
 
-void CTopi::BoostScore(TLit vExternal, double value)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::BoostScore(TLit vExternal, double value)
 {	
 	// cout << "\tc lb <BoostScoreLit> <Mult>" << endl;
 	if (m_DumpFile) (*m_DumpFile) << "lb " << vExternal << " " << value << endl;
@@ -207,7 +212,8 @@ void CTopi::BoostScore(TLit vExternal, double value)
 	UpdateScoreVar(v, value);
 }
 
-void CTopi::FixPolarityInternal(TULit l, bool onlyOnce)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::FixPolarityInternal(TULit l, bool onlyOnce)
 {
 	const TUVar v = GetVar(l);
 	if (!m_PolarityInfoActivated || v >= m_PolarityInfo.cap())
@@ -217,10 +223,16 @@ void CTopi::FixPolarityInternal(TULit l, bool onlyOnce)
 	}
 	if (unlikely(IsUnrecoverable())) return;
 
+	if (m_ParamUpdateParamsWhenVarFixed > 0 && !m_UpdateParamsWhenVarFixedDone && ((onlyOnce && m_ParamUpdateParamsWhenVarFixed == 1) || (!onlyOnce && m_ParamUpdateParamsWhenVarFixed == 2) || m_ParamUpdateParamsWhenVarFixed == 3))
+	{
+		SetParam("/decision/init_clss_boost/strat", 4);
+		m_UpdateParamsWhenVarFixedDone = true;
+	}
 	m_PolarityInfo[v] = TPolarityInfo(!onlyOnce, IsNeg(l));
 }
 
-void CTopi::FixPolarity(TLit lExternal, bool onlyOnce)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::FixPolarity(TLit lExternal, bool onlyOnce)
 {
 	// cout << "\tc lf <FixPolarityLit> <OnlyOnce>" << endl;
 	if (m_DumpFile) (*m_DumpFile) << "lf " << lExternal << " " << (int)onlyOnce << endl;
@@ -235,7 +247,18 @@ void CTopi::FixPolarity(TLit lExternal, bool onlyOnce)
 	FixPolarityInternal(l, onlyOnce);
 }
 
-void CTopi::ClearUserPolarityInfoInternal(TUVar v)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::CreateInternalLit(TLit lExternal)
+{
+	// cout << "\tc ll <Lit>" << endl;
+	if (m_DumpFile) (*m_DumpFile) << "ll " << lExternal  << endl;
+	const TLit vExternal = ExternalLit2ExternalVar(lExternal);
+
+	HandleIncomingUserVar(vExternal);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::ClearUserPolarityInfoInternal(TUVar v)
 {
 	if (m_PolarityInfoActivated)
 	{
@@ -247,7 +270,8 @@ void CTopi::ClearUserPolarityInfoInternal(TUVar v)
 	}
 }
 
-void CTopi::ClearUserPolarityInfo(TLit vExternal)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::ClearUserPolarityInfo(TLit vExternal)
 {
 	//	cout << "\tc lc <ClearUserPolarityInfoLit>" << endl;
 	if (m_DumpFile) (*m_DumpFile) << "lc " << vExternal << endl;
@@ -264,7 +288,8 @@ void CTopi::ClearUserPolarityInfo(TLit vExternal)
 	}
 }
 
-bool CTopi::TraiAssertConsistency()
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit,TUInd,Compress>::TrailAssertConsistency()
 {
 	for (auto [nextIndStartDecLevel, v] = make_tuple(false, m_TrailStart); v != BadUVar; v = m_VarInfo[v].m_TrailNext)
 	{
@@ -307,3 +332,7 @@ bool CTopi::TraiAssertConsistency()
 
 	return true;
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

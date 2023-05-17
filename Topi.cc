@@ -6,6 +6,8 @@
 #include <bit>
 #include <iterator> 
 #include <any>
+#include <algorithm>
+#include <numeric>
 #include "Topi.hpp"
 #include "SetInScope.h"
 #include "Diamond.h"
@@ -19,14 +21,15 @@
 using namespace Topor;
 using namespace std;
 
-void CTopi::DumpSetUp(const char* filePrefix)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::DumpSetUp(const char* filePrefix)
 {
 	assert(filePrefix != nullptr);
 
 	stringstream ss;
 
 	ss << filePrefix << "_";
-	
+
 	time_t now;
 	time(&now);
 	struct tm* current = localtime(&now);
@@ -38,13 +41,15 @@ void CTopi::DumpSetUp(const char* filePrefix)
 			current->tm_hour << "_" << current->tm_min << "_" << current->tm_sec;
 	}
 	ss << ".cnf";
-	
-	m_DumpFile.reset(new std::ofstream(ss.str(), ofstream::out));	
+
+	m_DumpFile.reset(new std::ofstream(ss.str(), ofstream::out));
 }
 
-CTopi::CTopi(TLit varNumHint) : m_InitVarNumAlloc(varNumHint <= 0 ? InitEntriesInB : (size_t)varNumHint + 1), m_E2ILitMap(m_InitVarNumAlloc, (size_t)0),
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::CTopi(TLit varNumHint) : m_InitVarNumAlloc(varNumHint <= 0 ? InitEntriesInB : (size_t)varNumHint + 1), m_E2ILitMap(m_InitVarNumAlloc, (size_t)0),
 m_HandleNewUserCls(m_InitVarNumAlloc), m_Watches(GetInitLitNumAlloc(), (size_t)0), m_TrailLastVarPerDecLevel(1, BadClsInd),
-m_VarInfo(m_InitVarNumAlloc, (size_t)0), m_Stat(m_B.cap(), m_BNext, m_ParamVarActivityInc), m_VsidsHeap(m_Stat.m_VarActivityInc)
+m_VarInfo(m_InitVarNumAlloc, (size_t)0),
+m_Stat([&]() { return Compress ? m_BC.size() : 1; }, [&]() { return Compress ? BCCapacitySum() : m_B.cap(); }, [&]() { return Compress ? BCNextBitSum() / 64 + 1 : m_BNext; }, [&]() { return GetMemoryLayout(); }, m_ParamVarActivityInc), m_VsidsHeap(m_Stat.m_VarActivityInc)
 {
 	m_AssignmentInfo.reserve_exactly(m_InitVarNumAlloc, (size_t)0);
 
@@ -62,36 +67,39 @@ m_VarInfo(m_InitVarNumAlloc, (size_t)0), m_Stat(m_B.cap(), m_BNext, m_ParamVarAc
 	if (m_Params.IsError())
 	{
 		SetStatus(TToporStatus::STATUS_PARAM_ERROR, m_Params.GetErrorDescr());
-	} else if (m_B.uninitialized_or_erroneous())
+	}
+	else if (m_B.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate the main buffer");
-	} else if (m_InitVarNumAlloc != 0 && m_E2ILitMap.uninitialized_or_erroneous())
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate the main buffer");
+	}
+	else if (m_InitVarNumAlloc != 0 && m_E2ILitMap.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate m_E2IVarMap");
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate m_E2IVarMap");
 	}
 	else if (GetInitLitNumAlloc() != 0 && m_Watches.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate m_Watches");
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate m_Watches");
 	}
 	else if (m_InitVarNumAlloc != 0 && m_AssignmentInfo.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate m_AssignmentInfo");
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate m_AssignmentInfo");
 	}
 	else if (m_InitVarNumAlloc != 0 && m_VarInfo.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate m_VarInfo");
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate m_VarInfo");
 	}
 	else if (m_TrailLastVarPerDecLevel.uninitialized_or_erroneous())
 	{
-		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi::CTopi: couldn't allocate m_TrailLastVarPerDecLevel");
-	}	
+		SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "CTopi<TLit,TUInd,Compress>::CTopi: couldn't allocate m_TrailLastVarPerDecLevel");
+	}
 
-	SetMultipliers();	
+	SetMultipliers();
 
 	// m_DebugModel = { false, true, false, true, false, false, false, true, false, false, false, false, true, false, true, false, false, true, true, true, true };
 }
 
-void CTopi::SetParam(const string& paramName, double newVal)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SetParam(const string& paramName, double newVal)
 {
 	if (m_DumpFile) (*m_DumpFile) << "r " << paramName << " " << newVal << endl;
 
@@ -123,11 +131,11 @@ void CTopi::SetParam(const string& paramName, double newVal)
 	m_Params.SetParam(paramName, newVal);
 	if (m_Params.IsError())
 	{
-		SetStatus(TToporStatus::STATUS_PARAM_ERROR, m_Params.GetErrorDescr());		
+		SetStatus(TToporStatus::STATUS_PARAM_ERROR, m_Params.GetErrorDescr());
 	}
 
 	SetOverallTimeoutIfAny();
-	
+
 	if (IsMultiplierParam(paramName) || paramName == m_ModeParamName)
 	{
 		SetMultipliers();
@@ -136,23 +144,25 @@ void CTopi::SetParam(const string& paramName, double newVal)
 	if (IsVsidsInitOrderParam(paramName) || paramName == m_ModeParamName)
 	{
 		m_VsidsHeap.SetInitOrder(m_ParamVsidsInitOrder);
-	}	
+	}
 }
 
-bool CTopi::IsError() const
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::IsError() const
 {
 	return IsErroneous();
 }
 
-size_t CTopi::GetInitLitNumAlloc() const
+template <typename TLit, typename TUInd, bool Compress>
+size_t CTopi<TLit, TUInd, Compress>::GetInitLitNumAlloc() const
 {
 	assert(m_InitVarNumAlloc <= rotr((size_t)1, 1));
 	const size_t initLitNumAlloc = m_InitVarNumAlloc << 1;
 	return initLitNumAlloc == 0 ? numeric_limits<size_t>::max() : initLitNumAlloc;
 }
 
-
-TToporReturnVal CTopi::StatusToRetVal() const
+template <typename TLit, typename TUInd, bool Compress>
+TToporReturnVal CTopi<TLit, TUInd, Compress>::StatusToRetVal() const
 {
 	if (IsUnrecoverable())
 	{
@@ -173,11 +183,12 @@ TToporReturnVal CTopi::StatusToRetVal() const
 	{
 		return TToporReturnVal::RET_USER_INTERRUPT;
 	}
-	
+
 	return TToporReturnVal::RET_EXOTIC_ERROR;
 }
 
-TToporReturnVal CTopi::UnrecStatusToRetVal() const
+template <typename TLit, typename TUInd, bool Compress>
+TToporReturnVal CTopi<TLit, TUInd, Compress>::UnrecStatusToRetVal() const
 {
 	assert(IsUnrecoverable());
 
@@ -194,7 +205,8 @@ TToporReturnVal CTopi::UnrecStatusToRetVal() const
 	return TToporReturnVal::RET_EXOTIC_ERROR;
 }
 
-void CTopi::HandleIncomingUserVar(TLit v, bool isUndoable)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::HandleIncomingUserVar(TLit v, bool isUndoable)
 {
 	if (unlikely((size_t)v >= m_E2ILitMap.cap()))
 	{
@@ -230,7 +242,7 @@ void CTopi::HandleIncomingUserVar(TLit v, bool isUndoable)
 				return;
 			}
 		}
-		
+
 		if (unlikely(m_LastExistingVar >= m_AssignmentInfo.cap()))
 		{
 			m_AssignmentInfo.reserve_atleast(GetNextVar(), (size_t)0);
@@ -255,7 +267,8 @@ void CTopi::HandleIncomingUserVar(TLit v, bool isUndoable)
 	m_Stat.m_MaxUserVar = max(m_Stat.m_MaxUserVar, v);
 }
 
-void CTopi::DumpSpan(const span<TLit> c, const string& prefix, const string& suffix, bool addNewLine)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::DumpSpan(const span<TLit> c, const string& prefix, const string& suffix, bool addNewLine)
 {
 	(*m_DumpFile) << prefix;
 	for (size_t i = 0; i < c.size(); ++i)
@@ -273,7 +286,8 @@ void CTopi::DumpSpan(const span<TLit> c, const string& prefix, const string& suf
 	}
 }
 
-void CTopi::AddUserClause(const span<TLit> c)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::AddUserClause(const span<TLit> c)
 {
 	if (m_DumpFile) DumpSpan(c, "", " 0");
 
@@ -285,7 +299,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 	}
 
 	const auto lastExistingVarStart = m_LastExistingVar;
-	
+
 	bool isSuccess = false;
 	bool boostScores = false;
 
@@ -311,7 +325,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 				for (TULit l : cls)
 				{
 					const TUVar v = GetVar(l);
-					UpdateScoreVar(v, mult);					
+					UpdateScoreVar(v, mult);
 				}
 
 				if (InitClssBoostScoreStratIsReversedOrder())
@@ -388,15 +402,15 @@ void CTopi::AddUserClause(const span<TLit> c)
 			// The literal is falsified at decision level 0: no need to add it to the clause
 			continue;
 		}
-		
+
 		auto [isTau, isDuplicate, isAllocFailed] = m_HandleNewUserCls.NewLitIsTauIsDuplicate(litInternal);
-		
+
 		if (unlikely(isAllocFailed))
 		{
 			SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "AddClause: allocation failed during tautology&duplication test");
 			return;
 		}
-		
+
 		if (unlikely(isTau))
 		{
 			return;
@@ -413,7 +427,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 			// The clause is globally satisfied
 			return;
 		}
-		
+
 		// Handling the watches now		
 		if (unlikely(GetMaxLit(litInternal) >= m_Watches.cap()))
 		{
@@ -422,7 +436,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 			{
 				SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "AddClause: couldn't reserve m_Watches");
 				return;
-			}			
+			}
 		}
 
 		auto cls = m_HandleNewUserCls.GetCurrCls();
@@ -456,7 +470,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 	}
 
 	if (cls.size() == 1 && m_NewExternalVarsAddUserCls.size() == 1 && m_TrailStart != BadUVar && GetAssignedDecLevelVar(m_TrailStart) == 0 && (!IsAssigned(cls[0]) || GetAssignedDecLevel(cls[0]) != 0))
-	{		
+	{
 		// Exchange cls[0] by m_TrailStart's satisfied literal
 
 		const TULit iSatLit = GetAssignedLitForVar(m_TrailStart);
@@ -495,7 +509,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 			{
 				CVector<TContradictionInfo> cis;
 				ProcessDelayedImplication(cls[0], BadULit, BadClsInd, cis);
-			}			
+			}
 		}
 		else
 		{
@@ -513,16 +527,17 @@ void CTopi::AddUserClause(const span<TLit> c)
 				m_LastGloballySatisfiedLitAfterSimplify = m_LastExistingVar;
 			}
 		}
-		
+
 		return;
 	}
 
 	auto clsStart = AddClsToBufferAndWatch(cls, false);
+	assert(NV(2) || P("Clause start is " + HexStr(clsStart) + "\n"));
 	if (unlikely(IsUnrecoverable())) return;
 
 	if (InitClssBoostScoreStrat() != 0 && cls.size() > 1)
 	{
-		boostScores = true;		
+		boostScores = true;
 	}
 
 	// Take care of unit and contradictory clauses
@@ -539,7 +554,7 @@ void CTopi::AddUserClause(const span<TLit> c)
 		{
 			assert(!IsAssigned(cls[0]));
 			Assign(cls[0], clsStart, cls[1], GetAssignedDecLevel(cls[1]));
-		}		
+		}
 	}
 
 	// Take care of delayed implications
@@ -550,7 +565,8 @@ void CTopi::AddUserClause(const span<TLit> c)
 	}
 }
 
-bool CTopi::IsAssumptionRequired(size_t assumpInd)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 {
 	if (m_Stat.m_SolveInvs == 0 || m_Status != TToporStatus::STATUS_UNSAT || assumpInd >= m_UserAssumps.size())
 	{
@@ -616,7 +632,8 @@ bool CTopi::IsAssumptionRequired(size_t assumpInd)
 	return m_UserAssumps[assumpInd] != 0 && IsVisited(E2I(m_UserAssumps[assumpInd]));
 }
 
-void CTopi::HandleAssumptions(const span<TLit> userAssumps)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssumps)
 {
 	m_UserAssumps = userAssumps;
 
@@ -631,13 +648,13 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 	if (unlikely(IsUnrecoverable())) return;
 
 	{
-		span<TULit> assumpsSpan = m_Assumps.get_span_cap();
+		TSpanTULit assumpsSpan = m_Assumps.get_span_cap();
 
 		transform(userAssumps.begin(), userAssumps.end(), assumpsSpan.begin(), [&](TLit userLit) {
 			return E2I(userLit);
 		});
 	}
-	
+
 	// Remove the trailing zero (if any)
 	if (m_Assumps[m_Assumps.cap() - 1] == BadULit)
 	{
@@ -679,7 +696,8 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 			{
 				RemoveAssump();
 			}
-		} else if (unlikely(ai.m_IsAssump))
+		}
+		else if (unlikely(ai.m_IsAssump))
 		{
 			if (IsNeg(lAssump) != ai.m_IsAssumpNegated)
 			{
@@ -703,7 +721,7 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 	if (!m_ParamAssumpsSimpAllowReorder)
 	{
 		m_Assumps.remove_if_equal_and_cut_capacity(BadULit);
-	}	
+	}
 
 	// Find the first decision level, whose decision variable doesn't appear on the list of assumptions
 	TUV btLevel = 0;
@@ -755,7 +773,7 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 	{
 		if (firstUnassignedAssumpInd != m_Assumps.cap())
 		{
-			span<TULit> potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
+			TSpanTULit potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
 			for (size_t assumpLitI = 0; assumpLitI < potentiallyUnassignedAssumpsSpan.size(); ++assumpLitI)
 			{
 				const TULit assumpLit = potentiallyUnassignedAssumpsSpan[assumpLitI];
@@ -781,7 +799,7 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 						m_LatestEarliestFalsifiedAssump = assumpLit;
 						m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;
 
-						const span<TULit> contradictingCls = CiGetSpan(contradictionInfo);
+						const auto contradictingCls = CiGetSpan(contradictionInfo, 2);
 						auto maxDecLevelInContradictingCls = max(GetAssignedDecLevel(contradictingCls[0]), GetAssignedDecLevel(contradictingCls[1]));
 						if (unlikely(maxDecLevelInContradictingCls == 0))
 						{
@@ -804,13 +822,14 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 			}
 			assert(all_of(potentiallyUnassignedAssumpsSpan.begin(), potentiallyUnassignedAssumpsSpan.end(), [&](TULit l) { return IsAssigned(l); }));
 		}
-	} else
+	}
+	else
 	{
 		assert(m_ParamAssumpsConflictStrat == 1);
 		m_DecLevelOfLastAssignedAssumption = m_DecLevel;
 		if (firstUnassignedAssumpInd != m_Assumps.cap())
 		{
-			span<TULit> potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
+			TSpanTULit potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
 			bool someAssumpsAreUnassigned = true;
 			while (someAssumpsAreUnassigned)
 			{
@@ -852,7 +871,8 @@ void CTopi::HandleAssumptions(const span<TLit> userAssumps)
 	}
 }
 
-TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
+template <typename TLit, typename TUInd, bool Compress>
+TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
 {
 	if (m_DumpFile)
 	{
@@ -862,10 +882,10 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 		(*m_DumpFile) << "oc " << confThr << endl;
 		DumpSpan(userAssumps, "s ", " 0");
 	}
-	
+
 	assert((m_Stat.m_SolveInvs == 0) == (m_QueryCurr == TQueryType::QUERY_NONE));
 	m_QueryCurr = m_QueryCurr == TQueryType::QUERY_NONE ? TQueryType::QUERY_INIT : confThr <= (uint64_t)m_ParamShortQueryConfThrInv ? TQueryType::QUERY_INC_SHORT : TQueryType::QUERY_INC_NORMAL;
-	
+
 	const bool restoreParamsOnExit = m_QueryCurr == TQueryType::QUERY_INC_SHORT && !m_ShortInvLifetimeParamVals.empty();
 	CTopiParams* paramsToRestore(nullptr);
 
@@ -881,7 +901,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "Solve: paramsToRestore allocation failed");
 			return trv = UnrecStatusToRetVal();
 		}
-				
+
 		for (auto& pv : m_ShortInvLifetimeParamVals)
 		{
 			SetParam(pv.first, pv.second);
@@ -895,13 +915,16 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 	{
 		Backtrack(0);
 	}
-	
+
 	if (m_ParamVerbosity > 0)
 	{
 		if (!m_AxePrinted)
 		{
 			PrintAxe();
-		}	
+			cout << print_as_color<ansi_color_code::blue>("c Literal bit-width= ") << print_as_color<ansi_color_code::blue>(to_string(sizeof(TLit) << 3)) <<
+				print_as_color < ansi_color_code::blue>("; Clause-index bit-width= ") << print_as_color<ansi_color_code::blue>(to_string(sizeof(TUInd) << 3)) <<
+				print_as_color < ansi_color_code::blue>("; Compress = ") << print_as_color<ansi_color_code::blue>(Compress ? "1" : "0") << endl;
+		}
 		cout << m_Params.GetAllParamsCurrValues();
 	}
 
@@ -909,10 +932,10 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 
 	m_IsSolveOngoing = true;
 
-	m_Stat.NewSolveInvocation(m_QueryCurr == CTopi::TQueryType::QUERY_INC_SHORT);
+	m_Stat.NewSolveInvocation(m_QueryCurr == CTopi<TLit, TUInd, Compress>::TQueryType::QUERY_INC_SHORT);
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
-	{	
+	{
 		if (IsCbLearntOrDrat() && (m_Status == TToporStatus::STATUS_UNSAT || m_Status == TToporStatus::STATUS_CONTRADICTORY))
 		{
 			vector<TULit> emptyCls;
@@ -925,18 +948,18 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			for (TULit lAssump : m_Assumps.get_span_cap())
 			{
 				const TUVar vAssump = GetVar(lAssump);
- 				m_AssignmentInfo[vAssump].m_IsAssump = false;
+				m_AssignmentInfo[vAssump].m_IsAssump = false;
 			}
-			
+
 			m_Assumps.reserve_exactly(0);
 		}
-		
+
 		m_EarliestFalsifiedAssump = BadULit;
 
 		if (m_ParamVerbosity > 0) cout << m_Stat.StatStrShort();
 
 		if (m_Stat.m_SolveInvs == m_ParamPrintDebugModelInvocation)
-		{			
+		{
 			PrintDebugModel(trv);
 		}
 
@@ -1011,28 +1034,28 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			const auto userVar = ExternalLit2ExternalVar(userLit);
 			HandleIncomingUserVar(userVar);
 			if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
-		}	
-	}		
-	
+		}
+	}
+
 	ReserveExactly(m_E2ILitMap, m_Stat.m_MaxUserVar + 1, "m_E2IVarMap in Solve");
 	ReserveVarAndLitData();
 	ClsDeletionInit();
-	RestartInit();	
-	DecisionInit();	
+	RestartInit();
+	DecisionInit();
 	BacktrackingInit();
-	
+
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
 
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
 
 	if (UseI2ELitMap())
-	{		
+	{
 		for (TLit externalVar = 1; externalVar <= m_Stat.m_MaxUserVar; ++externalVar)
 		{
 			assert(externalVar < (TLit)m_E2ILitMap.cap() && GetVar(m_E2ILitMap[externalVar]) < m_I2ELitMap.cap());
 			const auto iLit = m_E2ILitMap[externalVar];
 			m_I2ELitMap[GetVar(iLit)] = IsAssignedNegated(iLit) ? -externalVar : externalVar;
-		}		
+		}
 	}
 
 	TContradictionInfo pi = BCP();
@@ -1046,7 +1069,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 		{
 			SetStatus(TToporStatus::STATUS_CONTRADICTORY, "Global contradiction: discovered by BCP at decision level 0");
 			return trv = TToporReturnVal::RET_UNSAT;
-		}		
+		}
 		else
 		{
 			ConflictAnalysisLoop(pi);
@@ -1059,7 +1082,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			}
 		}
 	}
-	
+
 	// Handling the assumptions, if any
 	HandleAssumptions(userAssumps);
 	if (m_Status != TToporStatus::STATUS_UNDECIDED)
@@ -1071,7 +1094,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 	{
 		VerifyDebugModel();
 	}
-	
+
 	if (m_AssignedVarsNum == m_LastExistingVar)
 	{
 		// All the variables have been assigned -> a model!
@@ -1082,7 +1105,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 	const auto confThrAfterThisConfNumReached = confThr == numeric_limits<decltype(confThr)>::max() ? numeric_limits<decltype(m_Stat.m_Conflicts)>::max() : m_Stat.m_Conflicts + confThr;
 
 	if (m_ParamVerbosity > 0) cout << m_Stat.StatStrShort();
-	
+
 	m_DecLevelOfLastAssignedAssumption = m_Assumps.cap() == 0 ? 0 : GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(m_Assumps.get_span_cap(), 0));
 
 	if (m_ParamInitPolarityStrat != 1 && m_PrevAiCap < m_AssignmentInfo.cap())
@@ -1102,7 +1125,7 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 	while (m_Status == TToporStatus::STATUS_UNDECIDED)
 	{
 		if (m_InterruptNow || (M_CbStopNow != nullptr && M_CbStopNow() == TStopTopor::VAL_STOP))
-		{			
+		{
 			if (m_InterruptNow)
 			{
 				SetStatus(TToporStatus::STATUS_USER_INTERRUPT, "Interrupt by the Interrupt callback");
@@ -1112,11 +1135,11 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			{
 				SetStatus(TToporStatus::STATUS_USER_INTERRUPT, "Interrupt by the StopNow callback");
 			}
-		}		
+		}
 		if (unlikely(IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)) return trv = StatusToRetVal();
-		
+
 		SimplifyIfRequired();
-		DeleteClausesIfRequired();		
+		DeleteClausesIfRequired();
 		CompressBuffersIfRequired();
 
 		if (unlikely(IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)) return trv = StatusToRetVal();
@@ -1127,21 +1150,21 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 		assert(l != BadULit);
 		assert(NV(2) || P("***** Decision at level " + to_string(m_DecLevel) + ": " + SLit(l) + "\n"));
 
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		[[maybe_unused]] bool isContraditory = Assign(l, BadClsInd, BadULit, m_DecLevel);
 		assert(!isContraditory);
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 
-		TContradictionInfo contradictionInfo = BCP();		
+		TContradictionInfo contradictionInfo = BCP();
 		const bool isContradictionBeforeConflictAnalysis = contradictionInfo.IsContradiction();
-		
+
 		ConflictAnalysisLoop(contradictionInfo, m_ParamReuseTrail);
 
 		if (unlikely(IsUnrecoverable())) return trv = StatusToRetVal();
 
 		if (m_EarliestFalsifiedAssump != BadULit)
 		{
-			SetStatus(TToporStatus::STATUS_UNSAT, "Assumption flipped!");			
+			SetStatus(TToporStatus::STATUS_UNSAT, "Assumption flipped!");
 		}
 		else if (!contradictionInfo.IsContradiction() && m_AssignedVarsNum == m_LastExistingVar)
 		{
@@ -1152,12 +1175,14 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 		{
 			// Global timeout
 			SetStatusGlobalTimeout();
-		} else if (m_Stat.m_Conflicts >= confThrAfterThisConfNumReached)
+		}
+		else if (m_Stat.m_Conflicts >= confThrAfterThisConfNumReached)
 		{
 			// Local conflict threshold reached
 			SetStatus(TToporStatus::STATUS_UNDECIDED, "Conflicts threshold of " + to_string(confThr) + " reached");
 			return trv = TToporReturnVal::RET_CONFLICT_OUT;
-		} else if (m_Stat.m_TimeSinceLastSolveStart.IsTimeoutSet() && m_Stat.m_TimeSinceLastSolveStart.IsTimeout())
+		}
+		else if (m_Stat.m_TimeSinceLastSolveStart.IsTimeoutSet() && m_Stat.m_TimeSinceLastSolveStart.IsTimeout())
 		{
 			SetStatusLocalTimeout();
 			return trv = TToporReturnVal::RET_TIMEOUT_LOCAL;
@@ -1168,12 +1193,13 @@ TToporReturnVal CTopi::Solve(const span<TLit> userAssumps, pair<double, bool> to
 			Backtrack(m_DecLevelOfLastAssignedAssumption, false, m_ParamReuseTrail);
 		}
 	}
-		
+
 	return trv = StatusToRetVal();
 }
 
-Topor::TToporLitVal CTopi::GetValue(TLit l) const
-{	
+template <typename TLit, typename TUInd, bool Compress>
+Topor::TToporLitVal CTopi<TLit, TUInd, Compress>::GetValue(TLit l) const
+{
 	const TULit litInternal = E2I(l);
 	assert(litInternal < GetNextLit());
 
@@ -1181,7 +1207,8 @@ Topor::TToporLitVal CTopi::GetValue(TLit l) const
 	return litInternal == BadULit ? TToporLitVal::VAL_DONT_CARE : !IsAssigned(litInternal) ? TToporLitVal::VAL_UNASSIGNED : IsFalsified(litInternal) ? TToporLitVal::VAL_UNSATISFIED : TToporLitVal::VAL_SATISFIED;
 }
 
-vector<Topor::TToporLitVal> CTopi::GetModel() const
+template <typename TLit, typename TUInd, bool Compress>
+vector<Topor::TToporLitVal> CTopi<TLit, TUInd, Compress>::GetModel() const
 {
 	vector<Topor::TToporLitVal> m(m_E2ILitMap.cap());
 	for (TLit v = 1; v < (TLit)m.size(); ++v)
@@ -1191,17 +1218,20 @@ vector<Topor::TToporLitVal> CTopi::GetModel() const
 	return m;
 }
 
-Topor::TToporStatistics CTopi::GetStatistics() const
+template <typename TLit, typename TUInd, bool Compress>
+Topor::TToporStatistics<TLit, TUInd> CTopi<TLit, TUInd, Compress>::GetStatistics() const
 {
 	return m_Stat;
 }
 
-string CTopi::GetParamsDescr() const
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::GetParamsDescr() const
 {
 	return m_Params.GetAllParamsDescr();
 }
 
-void CTopi::SetOverallTimeoutIfAny()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SetOverallTimeoutIfAny()
 {
 	if (m_ParamOverallTimeout != numeric_limits<double>::max())
 	{
@@ -1210,7 +1240,8 @@ void CTopi::SetOverallTimeoutIfAny()
 	}
 }
 
-void CTopi::PrintAxe()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::PrintAxe()
 {
 	cout << "\
 c Intel(R) SAT Solver by Alexander Nadel\n\
@@ -1231,9 +1262,10 @@ c         | |\n";
 	m_AxePrinted = true;
 }
 
-Topor::TUV CTopi::GetDecLevelWithBestScore(TUV dlLowestIncl, TUV dlHighestExcl)
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::TUV CTopi<TLit, TUInd, Compress>::GetDecLevelWithBestScore(CTopi::TUV dlLowestIncl, CTopi::TUV dlHighestExcl)
 {
-	assert(m_ParamCustomBtStrat > 0);
+	assert(m_CurrCustomBtStrat > 0);
 
 	if (dlHighestExcl <= dlLowestIncl + 1)
 	{
@@ -1241,7 +1273,7 @@ Topor::TUV CTopi::GetDecLevelWithBestScore(TUV dlLowestIncl, TUV dlHighestExcl)
 	}
 
 	const auto currDlSpan = m_BestScorePerDecLevel.get_const_span_cap(dlLowestIncl, dlHighestExcl - dlLowestIncl);
-		
+
 	TUV maxElemI = 0;
 	double maxElem = 0.;
 	for (TUV i = 0; i < (TUV)currDlSpan.size(); ++i)
@@ -1253,18 +1285,19 @@ Topor::TUV CTopi::GetDecLevelWithBestScore(TUV dlLowestIncl, TUV dlHighestExcl)
 			continue;
 		}
 		const double currElem = currDlSpan[i];
-		if (currElem > maxElem || (m_ParamCustomBtStrat == 1 && currElem == maxElem))
+		if (currElem > maxElem || (m_CurrCustomBtStrat == 1 && currElem == maxElem))
 		{
 			maxElem = currElem;
 			maxElemI = i;
-		}		
+		}
 		assert(CalcMaxDecLevelScore(currDecLevel) == m_BestScorePerDecLevel[currDecLevel]);
 	}
 
 	return dlLowestIncl + maxElemI;
 }
 
-void CTopi::NewDecLevel()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::NewDecLevel()
 {
 	++m_DecLevel;
 	if (m_RstNumericLocalConfsSinceRestartAtDecLevelCreation.cap() != 0)
@@ -1273,7 +1306,8 @@ void CTopi::NewDecLevel()
 	}
 }
 
-void CTopi::SetMultipliers()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SetMultipliers()
 {
 	m_B.SetMultiplier(m_ParamMultClss);
 	m_AssignmentInfo.SetMultiplier(m_ParamMultVars);
@@ -1285,7 +1319,8 @@ void CTopi::SetMultipliers()
 	m_W.SetMultiplier(m_ParamMultWatches);
 }
 
-void CTopi::MarkWatchBufferChunkDeletedOrByLiteral(TUInd wlbInd, TUInd allocatedEntries, TULit l)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MarkWatchBufferChunkDeletedOrByLiteral(TUInd wlbInd, TUInd allocatedEntries, TULit l)
 {
 	// Mark the moved region as deleted in the following format:
 	// [log_2(allocated-entries) 0] or as marked by a literal if, l != 0
@@ -1294,14 +1329,16 @@ void CTopi::MarkWatchBufferChunkDeletedOrByLiteral(TUInd wlbInd, TUInd allocated
 	m_W[wlbInd + 1] = l;
 }
 
-void CTopi::MarkWatchBufferChunkDeleted(TWatchInfo& wi)
-{	
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MarkWatchBufferChunkDeleted(TWatchInfo& wi)
+{
 	assert(has_single_bit(wi.m_AllocatedEntries));
 	assert(wi.m_AllocatedEntries >= 2);
 	MarkWatchBufferChunkDeletedOrByLiteral(wi.m_WBInd, wi.m_AllocatedEntries);
 }
 
-bool CTopi::IsVisitedConsistent() const
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::IsVisitedConsistent() const
 {
 	for (TUVar v = 1; v < GetNextVar(); ++v)
 	{
@@ -1316,7 +1353,8 @@ bool CTopi::IsVisitedConsistent() const
 	return true;
 }
 
-double CTopi::CalcMaxDecLevelScore(TUV dl) const
+template <typename TLit, typename TUInd, bool Compress>
+double CTopi<TLit, TUInd, Compress>::CalcMaxDecLevelScore(TUV dl) const
 {
 	double bestScore = 0;
 	for (TUVar v = dl == 0 ? m_TrailStart : GetDecVar(dl); v != BadUVar && GetAssignedDecLevelVar(v) == dl; v = m_VarInfo[v].m_TrailNext)
@@ -1326,11 +1364,12 @@ double CTopi::CalcMaxDecLevelScore(TUV dl) const
 		{
 			bestScore = currScore;
 		}
-	}	
+	}
 	return bestScore;
 }
 
-double CTopi::CalcMinDecLevelScore(TUV dl) const
+template <typename TLit, typename TUInd, bool Compress>
+double CTopi<TLit, TUInd, Compress>::CalcMinDecLevelScore(TUV dl) const
 {
 	double bestScore = numeric_limits<double>::max();
 	for (TUVar v = dl == 0 ? m_TrailStart : GetDecVar(dl); v != BadUVar && GetAssignedDecLevelVar(v) == dl; v = m_VarInfo[v].m_TrailNext)
@@ -1344,8 +1383,83 @@ double CTopi::CalcMinDecLevelScore(TUV dl) const
 	return bestScore;
 }
 
+template <typename TLit, typename TUInd, bool Compress>
+string Topor::CTopi<TLit, TUInd, Compress>::GetMemoryLayout() const
+{
+	if (!m_ParamPrintMemoryProfiling)
+	{
+		return "";
+	}
+
+	unordered_map<string, size_t> name2Mb;
+
+	name2Mb["m_BC"] = 0;
+	for (auto& i : m_BC)
+	{
+		name2Mb["m_BC"] += i.second.memMb();
+	}
+
+	name2Mb["m_E2ILitMap"] = m_E2ILitMap.memMb();
+	name2Mb["m_I2ELitMap"] = m_I2ELitMap.memMb();
+	name2Mb["m_B"] = m_B.memMb();	
+	name2Mb["m_W"] = m_W.memMb();
+	name2Mb["m_Watches"] = m_Watches.memMb();
+	name2Mb["m_TrailLastVarPerDecLevel"] = m_TrailLastVarPerDecLevel.memMb();
+	name2Mb["m_BestScorePerDecLevel"] = m_BestScorePerDecLevel.memMb();
+	name2Mb["m_AssignmentInfo"] = m_AssignmentInfo.memMb();
+	name2Mb["m_VarInfo"] = m_VarInfo.memMb();
+	name2Mb["m_PolarityInfo"] = m_PolarityInfo.memMb();
+	name2Mb["m_Assumps"] = m_Assumps.memMb();
+	name2Mb["m_HugeCounterPerDecLevel"] = m_HugeCounterPerDecLevel.memMb();
+	name2Mb["m_DecLevelsLastAppearenceCounter"] = m_DecLevelsLastAppearenceCounter.memMb();
+	name2Mb["m_CurrClsCounters"] = m_CurrClsCounters.memMb();
+	name2Mb["m_RstNumericLocalConfsSinceRestartAtDecLevelCreation"] = m_RstNumericLocalConfsSinceRestartAtDecLevelCreation.memMb();
+	name2Mb["m_HandleNewUserCls"] = m_HandleNewUserCls.memMb();
+	
+	name2Mb["m_NewExternalVarsAddUserCls"] = m_NewExternalVarsAddUserCls.memMb();
+	name2Mb["m_ToPropagate"] = m_ToPropagate.memMb();
+	name2Mb["m_Cis"] = m_Cis.memMb();
+	name2Mb["m_Dis"] = m_Dis.memMb();
+	name2Mb["m_ReuseTrail"] = m_ReuseTrail.memMb();
+	name2Mb["m_VarsParentSubsumed"] = m_VarsParentSubsumed.memMb();
+	name2Mb["m_HandyLitsClearBefore"] = m_HandyLitsClearBefore[0].memMb() + m_HandyLitsClearBefore[1].memMb();
+	name2Mb["m_VisitedVars"] = m_VisitedVars.memMb();
+	name2Mb["m_RootedVars"] = m_RootedVars.memMb();
+	name2Mb["m_UserCls"] = m_UserCls.memMb();
+
+	name2Mb["m_VsidsHeap"] = m_VsidsHeap.memMb();
+	name2Mb["m_TmpClss"] = accumulate(m_TmpClss.begin(), m_TmpClss.end(), (size_t)0, [&](size_t sum, auto& it)
+	{
+		return sum + it.memMb();
+	});
+	name2Mb["m_TmpClssDebug"] = accumulate(m_TmpClssDebug.begin(), m_TmpClssDebug.end(), (size_t)0, [&](size_t sum, auto& it)
+	{
+		return sum + it.memMb();
+	});
+	
+	size_t overallSzInMb = 0;
+	vector<pair<string, size_t>> name2MbVec(name2Mb.size());
+	transform(name2Mb.begin(), name2Mb.end(), name2MbVec.begin(), [&](auto ssPair) { overallSzInMb += ssPair.second;  return ssPair; });
+	sort(name2MbVec.begin(), name2MbVec.end(), [&](auto& i1, auto& i2) { return i1.second > i2.second; });
+
+	stringstream ss;
+	ss << "c MEMORY -- all : " << overallSzInMb << " *** ";
+	for (auto& nm: name2MbVec)
+	{
+		ss << nm.first << " : " << nm.second << "; ";
+	}
+	return ss.str();
+}
+
+
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;
+
 /*
 * Future
 */
 
 // #topor: conflict clause analysis: 1) vivification: see Kissat paper; 2) replace glue with 2glue?
+

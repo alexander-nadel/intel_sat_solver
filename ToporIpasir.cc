@@ -7,7 +7,7 @@ using namespace std;
 
 namespace Topor
 {
-	class CToporIpasirWrapper : public CTopor
+	class CToporIpasirWrapper : public CTopor<>
 	{
 	public:
 		void Add(int lit) 

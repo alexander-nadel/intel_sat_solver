@@ -6,39 +6,41 @@
 using namespace std;
 using namespace Topor;
 
-string CTopi::SVar(TUVar v)
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SVar(TUVar v) const
 {
 	stringstream ss;
-	
+
 	const string sv = to_string(v);
 
 	ss << sv << setprecision(10);
 
 	if (IsAssignedVar(v))
 	{
-		ss << "@" << m_VarInfo[v].m_DecLevel; 
+		ss << "@" << m_VarInfo[v].m_DecLevel;
 		const auto s = m_VsidsHeap.get_var_score(v);
-		if (s != 0)
+		/*if (s != 0)
 		{
 			ss << "=" << s;
-		}		
+		}*/
 	}
-	
+
 	return ss.str();
 }
 
-
-std::string CTopi::SLit(TULit l)
+template <typename TLit, typename TUInd, bool Compress>
+std::string CTopi<TLit, TUInd, Compress>::SLit(TULit l) const
 {
 	auto s = IsNeg(l) ? "-" + SVar(GetVar(l)) : SVar(GetVar(l));
 	if (IsAssigned(l))
 	{
-		s += "[" + (string)(IsSatisfied(l) ? "S" : "U") + "]";		
+		s += "[" + (string)(IsSatisfied(l) ? "S" : "U") + "]";
 	}
 	return s;
 }
 
-string CTopi::SReuseTrailEntry(const TReuseTrail& rt)
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SReuseTrailEntry(const TReuseTrail& rt)
 {
 	stringstream ss;
 
@@ -58,7 +60,8 @@ string CTopi::SReuseTrailEntry(const TReuseTrail& rt)
 	return ss.str();
 }
 
-string CTopi::SReuseTrail()
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SReuseTrail()
 {
 	stringstream ss;
 
@@ -74,7 +77,8 @@ string CTopi::SReuseTrail()
 	return ss.str();
 }
 
-string CTopi::SE2I()
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SE2I()
 {
 	stringstream ss;
 
@@ -90,17 +94,18 @@ string CTopi::SE2I()
 	return ss.str();
 }
 
-string CTopi::STrail()
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::STrail()
 {
 	stringstream ss;
 
 	ss << "Current trail (reversed):\n";
-	
+
 	for (TUVar v = m_TrailEnd; v != BadUVar; v = m_VarInfo[v].m_TrailPrev)
 	{
 		TULit l = GetAssignedLitForVar(v);
 		ss << "\t";
-		
+
 		[[maybe_unused]] const TUV vDecLevel = GetAssignedDecLevelVar(v);
 		[[maybe_unused]] const TUV prevDecLevel = m_VarInfo[v].m_TrailPrev == BadUVar ? numeric_limits<TUV>::max() : GetAssignedDecLevelVar(m_VarInfo[v].m_TrailPrev);
 
@@ -108,7 +113,7 @@ string CTopi::STrail()
 		{
 			ss << " DL " << vDecLevel << " *** ";
 		}
-		
+
 		ss << SLit(l) << " {";
 
 		const auto& ai = m_AssignmentInfo[GetVar(l)];
@@ -124,13 +129,15 @@ string CTopi::STrail()
 		}
 
 		ss << "}; ";
-	}	
+	}
 
 	ss << endl;
 
 	return ss.str();
 }
-string CTopi::SUserLits(span<TLit> litSpan)
+
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SUserLits(const span<TLit> litSpan) const
 {
 	stringstream ss;
 
@@ -142,19 +149,8 @@ string CTopi::SUserLits(span<TLit> litSpan)
 	return ss.str().substr(0, ss.str().size() - 1);
 }
 
-string CTopi::SLits(span<TULit> litSpan)
-{
-	stringstream ss;
-
-	for (TULit l : litSpan)
-	{
-		ss << SLit(l) << " ";
-	}
-
-	return ss.str().substr(0, ss.str().size() - 1);
-}
-
-string CTopi::SVars(span<TULit> varSpan)
+template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::SVars(const TSpanTULit varSpan) const
 {
 	stringstream ss;
 
@@ -166,13 +162,14 @@ string CTopi::SVars(span<TULit> varSpan)
 	return ss.str().substr(0, ss.str().size() - 1);
 }
 
-
-bool CTopi::P(const string& s)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::P(const string& s)
 {
 	cout << s << flush; return true;
 }
 
-void CTopi::PrintDebugModel(TToporReturnVal trv)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::PrintDebugModel(TToporReturnVal trv)
 {
 	if (trv != TToporReturnVal::RET_SAT)
 	{
@@ -195,15 +192,16 @@ void CTopi::PrintDebugModel(TToporReturnVal trv)
 	cout << "};\n";
 }
 
-void CTopi::VerifyDebugModel()
-{	
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::VerifyDebugModel()
+{
 	if (m_DebugModel.empty())
 	{
 		return;
 	}
 	assert((TLit)m_DebugModel.size() == m_Stat.m_MaxUserVar + 1);
 	// -1: undefined; 0: false; 1: true
-	CDynArray<uint8_t> internalVarVals((size_t)m_Stat.m_MaxInternalVar + 1, (size_t)-1);
+	CDynArray<uint8_t> internalVarVals((size_t)m_Stat.m_MaxInternalVar + 1, -1);
 
 	auto ExpectedVal = [&](TULit l)
 	{
@@ -221,14 +219,14 @@ void CTopi::VerifyDebugModel()
 
 		return expectedValVar;
 	};
-	
+
 	auto SInternalLitData = [&](TULit l)
 	{
 		stringstream ss;
-		
+
 		const auto elit = IsNeg(l) ? -m_I2ELitMap[GetVar(l)] : m_I2ELitMap[GetVar(l)];
 		ss << "{index " << l << " : ilit " << SLit(l) << " : elit " << elit << "; debugModel = " << (elit > 0 ? m_DebugModel[elit] : m_DebugModel[-elit]) << "}";
-		
+
 		return ss.str();
 	};
 
@@ -268,7 +266,7 @@ void CTopi::VerifyDebugModel()
 
 		if (wi.m_BinaryWatches != 0)
 		{
-			span<TULit> binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+			TSpanTULit binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				const auto expectedValSecondLit = ExpectedVal(secondLit);
@@ -278,20 +276,20 @@ void CTopi::VerifyDebugModel()
 					cout << "[l secondLit] = " << "[" << SInternalLitData(l) << ", " << SInternalLitData(secondLit) << "]" << endl;
 					cout << "VerifyDebugModel ERROR in verifying a binary clause! Exiting...\n";
 					exit(-1);
-				}				
+				}
 			}
 		}
 	}
 
 	int dbg = 0;
-	for (TUInd clsInd = LitsInPage; clsInd < m_BNext; clsInd = ClsEnd(clsInd), ++dbg)
+	for (TUInd clsInd = ClsLoopFirst(false); !ClsLoopCompleted(); clsInd = ClsLoopNext(), ++dbg)
 	{
 		if (ClsChunkDeleted(clsInd))
 		{
 			continue;
 		}
 
-		span<TULit> cls = Cls(clsInd);
+		const auto cls = ConstClsSpan(clsInd);
 
 		bool isOK = false;
 		for (TULit l : cls)
@@ -309,7 +307,7 @@ void CTopi::VerifyDebugModel()
 		if (!isOK)
 		{
 			for (TULit l : cls)
-			{ 
+			{
 				cout << SInternalLitData(l) << ", ";
 			}
 			cout << "\nVerifyDebugModel ERROR in verifying a long clause! Exiting...\n";
@@ -319,3 +317,7 @@ void CTopi::VerifyDebugModel()
 
 	cout << "VerifyDebugModel VERIFIED!\n";
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

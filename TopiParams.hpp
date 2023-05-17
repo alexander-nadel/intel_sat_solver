@@ -18,7 +18,7 @@ namespace Topor
 {
 	// The number of parameter modes
 	using TModeType = uint8_t;
-	static constexpr TModeType m_Modes = 8;
+	static constexpr TModeType m_Modes = 9;
 	static string m_ModeParamName = "/mode/value";	
 
 	class CTopiParams

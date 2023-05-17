@@ -8,100 +8,140 @@
 using namespace Topor;
 using namespace std;
 
-CTopor::CTopor(TLit varsNumHint) : m_Topi(new CTopi(varsNumHint)) {}
+template <typename TLit, typename TUInd, bool Compress>
+CTopor<TLit,TUInd,Compress>::CTopor(TLit varsNumHint) : m_Topi(new CTopi<TLit, TUInd, Compress>(varsNumHint)) 
+{
+	// TLit must be a signed integer
+	static_assert(std::is_signed<TLit>::value);
+	// TLit must be a power of 2
+	static_assert(std::has_single_bit(sizeof(TLit)));
+	// TUInd must be an unsigned integer
+	static_assert(std::is_unsigned<TUInd>::value);
+	// TUInd must be a power of 2
+	static_assert(std::has_single_bit(sizeof(TUInd)));
+	// TUInd must be at least as wide as TLit (since the clause and watch buffers will store literals, amongst others)
+	static_assert(sizeof(TUInd) >= sizeof(TLit));
+	// TUInd must not be wider than size_t
+	static_assert(sizeof(TUInd) <= sizeof(size_t));
+}
 
-CTopor::~CTopor()
+template <typename TLit, typename TUInd, bool Compress>
+CTopor<TLit,TUInd,Compress>::~CTopor()
 {
 	delete m_Topi;
 	m_Topi = nullptr;
 }
 
-void CTopor::AddClause(const span<TLit> c)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::AddClause(const span<TLit> c)
 {
 	m_Topi->AddUserClause(c);
 }
 
-TToporReturnVal CTopor::Solve(const span<TLit> assumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
+template <typename TLit, typename TUInd, bool Compress>
+TToporReturnVal CTopor<TLit,TUInd,Compress>::Solve(const span<TLit> assumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
 {
 	return m_Topi->Solve(assumps, toInSecIsCpuTime, confThr);
 }
 
-bool CTopor::IsAssumptionRequired(size_t assumpInd)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopor<TLit,TUInd,Compress>::IsAssumptionRequired(size_t assumpInd)
 {
 	return m_Topi->IsAssumptionRequired(assumpInd);
 }
 
-void CTopor::BoostScore(TLit v, double value)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::BoostScore(TLit v, double value)
 {
 	m_Topi->BoostScore(v, value);
 }
 
-void CTopor::FixPolarity(TLit l, bool onlyOnce)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::FixPolarity(TLit l, bool onlyOnce)
 {
 	m_Topi->FixPolarity(l, onlyOnce);
 }
 
-void CTopor::ClearUserPolarityInfo(TLit v)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit, TUInd, Compress>::CreateInternalLit(TLit l)
+{
+	m_Topi->CreateInternalLit(l);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::ClearUserPolarityInfo(TLit v)
 {
 	m_Topi->ClearUserPolarityInfo(v);
 }
 
-void CTopor::SetParam(const string& paramName, double newVal)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::SetParam(const string& paramName, double newVal)
 {
 	m_Topi->SetParam(paramName, newVal);
 }
 
-Topor::TToporLitVal CTopor::GetLitValue(TLit l) const
+template <typename TLit, typename TUInd, bool Compress>
+Topor::TToporLitVal CTopor<TLit,TUInd,Compress>::GetLitValue(TLit l) const
 {
 	return m_Topi->GetValue(l);
 }
 
-std::vector<TToporLitVal> CTopor::GetModel() const
+template <typename TLit, typename TUInd, bool Compress>
+std::vector<TToporLitVal> CTopor<TLit,TUInd,Compress>::GetModel() const
 {
 	return m_Topi->GetModel();
 }
 
-Topor::TToporStatistics CTopor::GetStatistics() const
+template <typename TLit, typename TUInd, bool Compress>
+Topor::TToporStatistics<TLit, TUInd> CTopor<TLit, TUInd, Compress>::GetStatistics() const
 {
 	return m_Topi->GetStatistics();
 }
 
-bool CTopor::IsError() const
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopor<TLit,TUInd,Compress>::IsError() const
 {
 	return m_Topi->IsError();
 }
 
-std::string CTopor::GetStatusExplanation() const
+template <typename TLit, typename TUInd, bool Compress>
+std::string CTopor<TLit,TUInd,Compress>::GetStatusExplanation() const
 {
 	return m_Topi->GetStatusExplanation();
 }
 
-std::string CTopor::GetParamsDescr() const
+template <typename TLit, typename TUInd, bool Compress>
+std::string CTopor<TLit,TUInd,Compress>::GetParamsDescr() const
 {
 	return m_Topi->GetParamsDescr();
 }
 
-void CTopor::DumpDrat(ofstream& openedDratFile, bool isDratBinary)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::DumpDrat(ofstream& openedDratFile, bool isDratBinary)
 {
 	m_Topi->DumpDrat(openedDratFile, isDratBinary);
 }
 
-void CTopor::SetCbStopNow(TCbStopNow CbStopNow)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::SetCbStopNow(TCbStopNow CbStopNow)
 {
 	m_Topi->SetCbStopNow(CbStopNow);
 }
 
-void CTopor::InterruptNow()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::InterruptNow()
 {
 	m_Topi->InterruptNow();
 }
 
-void CTopor::SetCbNewLearntCls(TCbNewLearntCls CbNewLearntCls)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::SetCbNewLearntCls(TCbNewLearntCls<TLit> CbNewLearntCls)
 {
 	m_Topi->SetCbNewLearntCls(CbNewLearntCls);
 }
 
-void CTopor::Backtrack(TLit decLevel)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit,TUInd,Compress>::Backtrack(TLit decLevel)
 {
 	m_Topi->Backtrack(decLevel, false, false, true);
 }
@@ -129,3 +169,7 @@ namespace Topor
 		return os;
 	}
 }
+
+template class CTopor<int32_t, uint32_t, false>;
+template class CTopor<int32_t, uint64_t, false>;
+template class CTopor<int32_t, uint64_t, true>;

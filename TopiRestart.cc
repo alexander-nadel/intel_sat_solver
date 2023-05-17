@@ -7,7 +7,8 @@
 using namespace Topor;
 using namespace std;
 
-bool CTopi::Restart()
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit,TUInd,Compress>::Restart()
 {
 	bool restartNow = false;	
 
@@ -48,7 +49,7 @@ bool CTopi::Restart()
 		++m_Stat.m_Restarts;
 		++m_RestartsSinceInvStart;
 		UpdateAllUipInfoAfterRestart();
-		assert(m_QueryCurr != CTopi::TQueryType::QUERY_NONE);
+		assert(m_QueryCurr != TQueryType::QUERY_NONE);
 		const auto currUnforceRestartsFraction = GetCurrUnforceRestartsFraction();
 		if (currUnforceRestartsFraction != 0. && currUnforceRestartsFraction != 1.)
 		{
@@ -80,7 +81,8 @@ bool CTopi::Restart()
 	return restartNow;
 }
 
-void CTopi::RstNewAssertingGluedCls(TUV glue)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::RstNewAssertingGluedCls(TUV glue)
 {
 	assert(m_CurrRestartStrat == RESTART_STRAT_LBD);
 
@@ -99,8 +101,8 @@ void CTopi::RstNewAssertingGluedCls(TUV glue)
 	m_RstGlueGlobalLbdSum += (double)glueThr;
 }
 
-
-void CTopi::RestartInit()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::RestartInit()
 {
 	assert(m_QueryCurr != TQueryType::QUERY_NONE);
 
@@ -176,8 +178,8 @@ void CTopi::RestartInit()
 	assert(NV(1) || P("Phase stage set: " + GetPhaseStageStr() + "\n"));
 }
 
-
-double CTopi::RestartLubySequence(double y, uint64_t x)
+template <typename TLit, typename TUInd, bool Compress>
+double CTopi<TLit,TUInd,Compress>::RestartLubySequence(double y, uint64_t x)
 {
 	// Finite subsequences of the Luby-sequence:
 	// 0: 1
@@ -199,3 +201,7 @@ double CTopi::RestartLubySequence(double y, uint64_t x)
 
 	return pow(y, seq);
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

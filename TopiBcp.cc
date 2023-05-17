@@ -12,17 +12,19 @@
 using namespace Topor;
 using namespace std;
 
-void CTopi::SwapWatch(const TUInd clsInd, bool watchInd, span<TULit>::iterator newWatchIt)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SwapWatch(const TUInd clsInd, bool watchInd, typename CCls::TIterator newWatchIt)
 {
-	span<TULit> cls = Cls(clsInd);
+	auto cls = Cls(clsInd);
 	size_t cls1WlInd = WLGetLongWatchInd(cls[watchInd], clsInd);
 	assert(cls1WlInd != numeric_limits<size_t>::max());
 	WLRemoveLongWatch(cls[watchInd], cls1WlInd);
 	swap(cls[watchInd], *newWatchIt);
-	WLAddLongWatch(cls[watchInd], cls[!watchInd], clsInd);	
+	WLAddLongWatch(cls[watchInd], cls[!watchInd], clsInd);
 }
 
-void CTopi::SwapCurrWatch(TULit l, span<TULit>::iterator newWatchIt, const TUInd clsInd, span<TULit>& cls, size_t& currLongWatchInd, TULit*& currLongWatchPtr, TWatchInfo& wi)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SwapCurrWatch(TULit l, typename CCls::TIterator newWatchIt, const TUInd clsInd, CCls& cls, size_t& currLongWatchInd, TULit*& currLongWatchPtr, TWatchInfo& wi)
 {
 	// Remove the current watch and adjust the indices, since removal moves the last watch into the current location
 	WLRemoveLongWatch(Negate(l), currLongWatchInd);
@@ -31,11 +33,12 @@ void CTopi::SwapCurrWatch(TULit l, span<TULit>::iterator newWatchIt, const TUInd
 	// Swap l and the visited literal in the clause and add watch to the visited literal
 	swap(cls[0], *newWatchIt);
 	WLAddLongWatch(cls[0], cls[1], clsInd);
-	// The line below is required to support the (very rare) occasions  of WLB's realloc actually moving m_B in WLAddLongWatch
-	cls = Cls(clsInd); currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+	// The line below is required to support the (very rare) occasions  of WLB's realloc actually moving m_W in WLAddLongWatch
+	currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 };
 
-span<TULit>::iterator CTopi::FindBestWLCand(span<TULit> cls, TUV maxDecLevel)
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::CCls::TIterator CTopi<TLit, TUInd, Compress>::FindBestWLCand(CCls& cls, TUV maxDecLevel)
 {
 	auto visitedLitIt = find_if(cls.begin() + 2, cls.end(), [&](const TULit visitedLit)
 	{
@@ -48,8 +51,8 @@ span<TULit>::iterator CTopi::FindBestWLCand(span<TULit> cls, TUV maxDecLevel)
 	}
 
 	TUV maxDecLevelClsSoFar = 0;
-	span<TULit>::iterator maxIt = cls.begin() + 2;
-	for (span<TULit>::iterator it = cls.begin() + 2; it != cls.end(); ++it)
+	auto maxIt = cls.begin() + 2;
+	for (auto it = cls.begin() + 2; it != cls.end(); ++it)
 	{
 		const auto lDecLevel = GetAssignedDecLevel(*it);
 		if (lDecLevel >= maxDecLevel)
@@ -66,14 +69,15 @@ span<TULit>::iterator CTopi::FindBestWLCand(span<TULit> cls, TUV maxDecLevel)
 	return maxIt;
 }
 
-void CTopi::BCPBacktrack(TUV decLevel, bool eraseDecLevel)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::BCPBacktrack(TUV decLevel, bool eraseDecLevel)
 {
 	// Only one literal of the highest decision level appears in the clause
 	Backtrack(decLevel, true);
-	
+
 	auto EraseLit = [&](TULit l) { return !IsAssigned(l) || (eraseDecLevel && GetAssignedDecLevel(l) == decLevel); };
 
-	m_ToPropagate.erase_if_may_reorder([&](TULit l) 
+	m_ToPropagate.erase_if_may_reorder([&](TULit l)
 	{
 		assert(!IsAssigned(l) || GetAssignedDecLevel(l) <= decLevel);
 		const bool eraseLit = EraseLit(l);
@@ -93,7 +97,8 @@ void CTopi::BCPBacktrack(TUV decLevel, bool eraseDecLevel)
 	}
 }
 
-CTopi::TContradictionInfo CTopi::BCP()
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::BCP()
 {
 	// Returns true iff BCP should stop propagating the current literal
 	auto NewContradiction = [&](TContradictionInfo&& newCi)
@@ -105,8 +110,8 @@ CTopi::TContradictionInfo CTopi::BCP()
 
 		assert(NV(2) || P("***** previous contradictions = " + CisString(m_Cis.get_span()) + "\n"));
 
-		const span<TULit> newCiSpan = CiGetSpan(newCi);
-		const array<TUV, 2> newCiSpanDecLevels = { GetAssignedDecLevel(newCiSpan[0]), GetAssignedDecLevel(newCiSpan[1]) };
+		const auto newCiSpanFirst2Lits = CiGetSpan(newCi, 2);
+		const array<TUV, 2> newCiSpanDecLevels = { GetAssignedDecLevel(newCiSpanFirst2Lits[0]), GetAssignedDecLevel(newCiSpanFirst2Lits[1]) };
 		auto maxDecLevelInContradictingCls = max(newCiSpanDecLevels[0], newCiSpanDecLevels[1]);
 
 		if (newCiSpanDecLevels[0] != newCiSpanDecLevels[1])
@@ -115,20 +120,20 @@ CTopi::TContradictionInfo CTopi::BCP()
 			if (!m_Cis.empty())
 			{
 				// Clear the previous contradictions, if any, which must be unassigned after the backtracking				
-				assert(all_of(m_Cis.get_span().begin(), m_Cis.get_span().end(), [&](TContradictionInfo& ci) { return !IsFalsified(CiGetSpan(ci)[0]) && !IsFalsified(CiGetSpan(ci)[1]); }));
+				assert(all_of(m_Cis.get_span().begin(), m_Cis.get_span().end(), [&](TContradictionInfo& ci) { return !IsFalsified(CiGetSpanDebug(ci)[0]) && !IsFalsified(CiGetSpanDebug(ci)[1]); }));
 				m_Cis.clear();
 			}
-			assert(IsAssigned(newCiSpan[0]) != IsAssigned(newCiSpan[1]) || P("Failure: " + SLits(newCiSpan) + "; trail: " + STrail() + "\n"));
-			assert(IsAssigned(newCiSpan[0]) != IsAssigned(newCiSpan[1]));
-			const TULit unassignedLit = IsAssigned(newCiSpan[0]) ? newCiSpan[1] : newCiSpan[0];
-			const TULit assignedLit = IsAssigned(newCiSpan[0]) ? newCiSpan[0] : newCiSpan[1];
+			assert(IsAssigned(newCiSpanFirst2Lits[0]) != IsAssigned(newCiSpanFirst2Lits[1]) || P("Failure: " + SLits((span<TULit>)newCiSpanFirst2Lits) + "; trail: " + STrail() + "\n"));
+			assert(IsAssigned(newCiSpanFirst2Lits[0]) != IsAssigned(newCiSpanFirst2Lits[1]));
+			const TULit unassignedLit = IsAssigned(newCiSpanFirst2Lits[0]) ? newCiSpanFirst2Lits[1] : newCiSpanFirst2Lits[0];
+			const TULit assignedLit = IsAssigned(newCiSpanFirst2Lits[0]) ? newCiSpanFirst2Lits[0] : newCiSpanFirst2Lits[1];
 			assert(IsFalsified(assignedLit));
 			if (!newCi.m_IsContradictionInBinaryCls && newCi.m_ParentClsInd != BadClsInd)
 			{
 				WLSetCached(assignedLit, newCi.m_ParentClsInd, unassignedLit);
 			}
 			Assign(unassignedLit, newCi.m_IsContradictionInBinaryCls ? BadClsInd : newCi.m_ParentClsInd, assignedLit, GetAssignedDecLevel(assignedLit));
-			assert(NV(2) || P("***** NewContradiction finished; stop-propagation = " + to_string(propagatedDecLevel > maxDecLevelInContradictingCls - 1)  + ": turned out to be a delayed implication; to-propagate: " + SLits(m_ToPropagate) + "; trail: " + STrail() + "\n"));
+			assert(NV(2) || P("***** NewContradiction finished; stop-propagation = " + to_string(propagatedDecLevel > maxDecLevelInContradictingCls - 1) + ": turned out to be a delayed implication; to-propagate: " + SLits(m_ToPropagate.get_span()) + "; trail: " + STrail() + "\n"));
 			return propagatedDecLevel > maxDecLevelInContradictingCls - 1;
 		}
 		else
@@ -140,13 +145,13 @@ CTopi::TContradictionInfo CTopi::BCP()
 			m_Cis.erase_if_may_reorder([&](TContradictionInfo& ci)
 			{
 				assert(ci.IsContradiction());
-				assert(IsAssigned(CiGetSpan(ci)[0]) == IsAssigned(CiGetSpan(ci)[1]));
-				return(!IsAssigned(CiGetSpan(ci)[0]));
+				assert(IsAssigned(CiGetSpanDebug(ci)[0]) == IsAssigned(CiGetSpanDebug(ci)[1]));
+				return(!IsAssigned(CiGetSpanDebug(ci, 1)[0]));
 			});
 
 			m_Cis.emplace_back(move(newCi));
-			
-			assert(NV(2) || P("***** NewContradiction finished; stop-propagation = " + to_string(propagatedDecLevel > maxDecLevelInContradictingCls - 1) + ": NOT a delayed implication; to-propagate = " + SLits(m_ToPropagate) + "\n"));
+
+			assert(NV(2) || P("***** NewContradiction finished; stop-propagation = " + to_string(propagatedDecLevel > maxDecLevelInContradictingCls - 1) + ": NOT a delayed implication; to-propagate = " + SLits(m_ToPropagate.get_span()) + "\n"));
 			return propagatedDecLevel >= maxDecLevelInContradictingCls;
 		}
 	};
@@ -161,12 +166,13 @@ CTopi::TContradictionInfo CTopi::BCP()
 		{
 			// The top literal must be a decision literal for each new iteration
 			assert(m_ReuseTrail.back().m_ParentClsInd == BadClsInd);
-			
+
 			if (!IsAssigned(m_ReuseTrail.back().m_L))
 			{
 				// If the decision literal is unassigned, we cannot reuse the trail yet, but we still hope to be able to use it
 				return false;
-			} else if (IsFalsified(m_ReuseTrail.back().m_L))
+			}
+			else if (IsFalsified(m_ReuseTrail.back().m_L))
 			{
 				// If the decision literal is falsified, we cannot reuse the saved trail anymore, so we clean it up				
 				m_ReuseTrail.clear();
@@ -193,7 +199,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 					// Making sure: (1) our literal is the first one in the parent clause, and 
 					// (2) the other watch has the highest possible decision level
 
-					span<TULit> cls = Cls(parentClsInd);
+					auto cls = Cls(parentClsInd);
 					assert(NV(2) || P("\tReusing trail: long parent before fixing: " + SLits(cls) + "\n"));
 					assert(cls[0] == currImpliedLit || cls[1] == currImpliedLit || IsFalsified(currImpliedLit));
 
@@ -233,7 +239,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 					}
 					else
 					{
-						span<TULit> cls = Cls(parentClsInd);
+						const auto cls = ConstClsSpan(parentClsInd, 2);
 						Assign(currImpliedLit, parentClsInd, BadULit, GetAssignedDecLevel(cls[1]));
 					}
 					++m_Stat.m_ReuseTrailAsssignments;
@@ -256,7 +262,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 		return false;
 	};
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
 
 	// assert(m_ParamAssertConsistency < 2 ||  P("DEBUG: " + SLits(GetCls(5304)) + "\n"));
@@ -265,7 +271,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 		ToPropagateClear();
 		CleanVisited();
 		m_CurrentlyPropagatedLit = BadULit;
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(m_Cis.empty()));
 		m_Cis.clear();
 	});
@@ -277,7 +283,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 	while (!m_ToPropagate.empty())
 	{
 		bool stopPropagating = false;
-		m_CurrentlyPropagatedLit = ToPropagateBackAndPop();		
+		m_CurrentlyPropagatedLit = ToPropagateBackAndPop();
 
 		[[maybe_unused]] auto IsLStillPropagated = [&]() { return IsAssigned(m_CurrentlyPropagatedLit) && IsSatisfied(m_CurrentlyPropagatedLit); };
 
@@ -296,12 +302,12 @@ CTopi::TContradictionInfo CTopi::BCP()
 		if (m_ParamSimplify)
 		{
 			--m_ImplicationsTillNextSimplify;
-		}		
+		}
 
 		// Go over the binary watches first. We would like to pre-fetch the longs too for cache reasons, otherwise we would have used
-		// span<TULit> binWatches = b.get_span(wi.m_BInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+		// TSpanTULit binWatches = b.get_span(wi.m_BInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 		const volatile auto allWatches = m_W.get_ptr(wi.m_WBInd);
-		span<TULit> binWatches = span<TULit>(allWatches + wi.GetLongEntries(), wi.m_BinaryWatches);
+		TSpanTULit binWatches = TSpanTULit(allWatches + wi.GetLongEntries(), wi.m_BinaryWatches);
 
 		// Have to use an old-fashioned index-based for loop, since binWatches might change inside the loop because of reallocation
 		for (size_t otherWatchI = 0; otherWatchI < binWatches.size(); ++otherWatchI)
@@ -322,14 +328,14 @@ CTopi::TContradictionInfo CTopi::BCP()
 					stopPropagating = ReuseTrail();
 					if (stopPropagating) break;
 					// ReuseTrail might realloc, hence updating binWatches
-					binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+					binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 				}
 			}
 			else if (isOtherWatchNegated)
 			{
 				// Contradiction				
-				stopPropagating = NewContradiction(TContradictionInfo({ Negate(m_CurrentlyPropagatedLit) , otherWatch }));								
-				if (stopPropagating) break;				
+				stopPropagating = NewContradiction(TContradictionInfo({ Negate(m_CurrentlyPropagatedLit) , otherWatch }));
+				if (stopPropagating) break;
 			}
 			else
 			{
@@ -340,7 +346,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 					stopPropagating = ProcessDelayedImplication(otherWatch, Negate(m_CurrentlyPropagatedLit), BadClsInd, m_Cis);
 					if (stopPropagating) break;
 					// ProcessDelayedImplication might realloc, hence updating binWatches
-					binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+					binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 					if (unlikely(m_CurrPropWatchModifiedDuringProcessDelayedImplication))
 					{
 						otherWatchI = -1;
@@ -352,9 +358,9 @@ CTopi::TContradictionInfo CTopi::BCP()
 		// Go over the long watches		
 		for (auto [currLongWatchInd, currLongWatchPtr] = make_pair((size_t)0, m_W.get_ptr(wi.m_WBInd)); !stopPropagating && currLongWatchInd < wi.m_LongWatches; ++currLongWatchInd, currLongWatchPtr += TWatchInfo::BinsInLong)
 		{
-			TULit& cachedLit = *currLongWatchPtr;	
+			TULit& cachedLit = *currLongWatchPtr;
 
-			assert(NV(2) || P("Visiting long clause: cached " + SLit(cachedLit) + "; clause: " + SLits(Cls(*(TUInd*)(currLongWatchPtr + 1)))+ "\n"));
+			assert(NV(2) || P("Visiting long clause: cached " + SLit(cachedLit) + "; clause: " + SLits(Cls(*(TUInd*)(currLongWatchPtr + 1))) + "\n"));
 
 			if (IsSatisfied(cachedLit) && GetAssignedDecLevel(cachedLit) <= lDecLevel)
 			{
@@ -365,17 +371,17 @@ CTopi::TContradictionInfo CTopi::BCP()
 			// Fetching the clause
 			const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);
 
-			span<TULit> cls = Cls(clsInd);
+			auto cls = Cls(clsInd);
 
 			assert(!ClsChunkDeleted(clsInd));
-			assert(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
+			assert(Compress || clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
 
 			// Making sure, our literal is the first one in the clause
 			if (cls[1] == Negate(m_CurrentlyPropagatedLit)) swap(cls[0], cls[1]);
 			assert(cls[0] == Negate(m_CurrentlyPropagatedLit));
 			const TULit otherWatch = cls[1];
 			const bool isOtherWatchSatisfied = IsSatisfied(otherWatch);
-		
+
 			// Update the cached literal to the second satisfied watch	
 			// If the current watch is removed, this operation doesn't matter
 			// However, it is essential for correctness of delayed implications processing, 
@@ -387,11 +393,11 @@ CTopi::TContradictionInfo CTopi::BCP()
 			{
 				const TUV otherWatchDecLevel = GetAssignedDecLevel(cls[1]);
 				if (otherWatchDecLevel <= lDecLevel)
-				{					
+				{
 					// The decision level of the other watch is not higher than that of l, so, fortunately, no chance of a delayed implication					
 					// Continue to the next clause
 					continue;
-				}				
+				}
 			}
 
 			// Going over the rest of the clause (that is, skipping the watches) to find the best WL candidate to swap with l
@@ -400,7 +406,7 @@ CTopi::TContradictionInfo CTopi::BCP()
 			const bool bestWLCandAssigned = IsAssigned(bestWLCandLit);
 			const bool bestWLCandSatisfied = IsSatisfied(bestWLCandLit);
 			const bool bestWLUnassignedOrSatisfied = (!bestWLCandAssigned) | bestWLCandSatisfied;
-			
+
 			if (bestWLUnassignedOrSatisfied || (lDecLevel < m_DecLevel && GetAssignedDecLevel(bestWLCandLit) > lDecLevel))
 			{
 				// If the candidate is unassigned, satisfied or has a greater decision level, swap it with the current watch
@@ -412,12 +418,12 @@ CTopi::TContradictionInfo CTopi::BCP()
 					// The candidate satisfied or it's unassigned --> we're done with this clause
 					continue;
 				}
-			}			
+			}
 
 			if (IsFalsified(cls[0]) && IsFalsified(cls[1]))
 			{
 				// Contradiction!
-				
+
 				// There might be a case, when a literal in the clause is assigned after the 2nd watch w.r.t decision levels,
 				// in which case we must swap them to prevent missed implications.
 				// An illustrating example: 
@@ -432,22 +438,22 @@ CTopi::TContradictionInfo CTopi::BCP()
 				// (9) Now we need to swap l15 and l17, since, otherwise, backtracking to decision level 16 and assigning l17 would result in a missed implication
 				const TUV cls1DecLevel = GetAssignedDecLevel(cls[1]);
 				if (cls1DecLevel < GetAssignedDecLevel(cls[0]))
-				{					
+				{
 					auto maxNonWLDecLevelIt = GetAssignedLitsHighestDecLevelIt(cls, 2);
 					if (cls1DecLevel < GetAssignedDecLevel(*maxNonWLDecLevelIt))
 					{
 						SwapWatch(clsInd, true, maxNonWLDecLevelIt);
 						if (unlikely(IsUnrecoverable())) return TContradictionInfo();
 						// The line below is required to support the (very rare) occasions of b's realloc actually moving b in WLAddLongWatch
-						cls = Cls(clsInd); currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+						currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 					}
 				}
 
-				stopPropagating = NewContradiction(clsInd);				
-			} 
+				stopPropagating = NewContradiction(clsInd);
+			}
 			else if (IsFalsified(cls[0]) && IsSatisfied(cls[1]) && GetAssignedDecLevel(cls[1]) > GetAssignedDecLevel(cls[0]))
-			// Note that it is possible that the other watch is satisfied, the other watch's dl is greater than that of l,
-			// but it's not a delayed implication any longer, since we swapped cls[0] with another falsified literal having a higher decision level			
+				// Note that it is possible that the other watch is satisfied, the other watch's dl is greater than that of l,
+				// but it's not a delayed implication any longer, since we swapped cls[0] with another falsified literal having a higher decision level			
 			{
 				// Delayed implication
 				stopPropagating = ProcessDelayedImplication(cls[1], cls[0], clsInd, m_Cis);
@@ -461,16 +467,16 @@ CTopi::TContradictionInfo CTopi::BCP()
 					// The line below is required to support the (very rare) occasions  of b's realloc in ProcessDelayedImplication actually moving b in WLAddLongWatch
 					currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 				}
-			} 
+			}
 			else if (IsFalsified(cls[0]) && !IsAssigned(cls[1]))
 			{
 				// The clause is unit
-				assert(all_of(cls.begin() + 2, cls.end(), [&](TULit l) { return IsFalsified(l); }));				
+				assert(all_of(cls.begin() + 2, cls.end(), [&](TULit l) { return IsFalsified(l); }));
 				// Imply the other watch now
-				Assign(cls[1], clsInd, cls[0], GetAssignedDecLevel(cls[0]));				
+				Assign(cls[1], clsInd, cls[0], GetAssignedDecLevel(cls[0]));
 				if (m_ParamReuseTrail && !m_ReuseTrail.empty())
 				{
-					stopPropagating = ReuseTrail();					
+					stopPropagating = ReuseTrail();
 					// ReuseTrail might realloc, hence updating currLongWatchPtr
 					currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 				}
@@ -500,26 +506,27 @@ CTopi::TContradictionInfo CTopi::BCP()
 		{
 			return m_Cis.back();
 		}
-		
+
 		if (m_ParamBestContradictionStrat == 0)
 		{
-			return *min_element(cisSpan.begin(), cisSpan.end(), [&](TContradictionInfo& ci1, TContradictionInfo& ci2)
+			return *min_element(cisSpan.begin(), cisSpan.end(), [&](TContradictionInfo& ci)
 			{
-				return CiGetSpan(ci1).size() < CiGetSpan(ci2).size();
-			});			
+				return CiGetSize(ci);
+			});
 		}
 		else
 		{
 			assert(m_ParamBestContradictionStrat == 1);
-			return *min_element(cisSpan.begin(), cisSpan.end(), [&](TContradictionInfo& ci1, TContradictionInfo& ci2)
+			return *min_element(cisSpan.begin(), cisSpan.end(), [&](TContradictionInfo& ci)
 			{
-				return GetGlueAndMarkCurrDecLevels(CiGetSpan(ci1)) < GetGlueAndMarkCurrDecLevels(CiGetSpan(ci2));
+				return GetGlueAndMarkCurrDecLevels(CiGetSpan(ci));
 			});
-		}		
-	}	
+		}
+	}
 }
 
-bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentClsInd, CVector<TContradictionInfo>& cis)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentClsInd, CVector<TContradictionInfo>& cis)
 {
 	unordered_set<TUV> decLevelsRecalcBestScore;
 	const auto initDl = m_DecLevel;
@@ -528,30 +535,30 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 	[[maybe_unused]] auto decLevelStart = m_DecLevel;
 	// m_CurrentlyPropagatedLit can be BadULit only if the delayed implication emerged in a user-added clause
 	const TUV propagatedDecLevel = m_CurrentlyPropagatedLit == BadULit ? BadUVar : GetAssignedDecLevel(m_CurrentlyPropagatedLit);
-	const TUV cisMaxDecLevel = cis.empty() ? 0 : GetAssignedDecLevel(CiGetSpan(cis[0])[0]);
-	assert(cis.empty() || all_of(cis.get_span().begin(), cis.get_span().end(), [&](TContradictionInfo& ci) { return CiIsLegal(ci) && GetAssignedDecLevel(CiGetSpan(ci)[0]) == cisMaxDecLevel && GetAssignedDecLevel(CiGetSpan(ci)[1]) == cisMaxDecLevel; }));
-	
+	const TUV cisMaxDecLevel = cis.empty() ? 0 : GetAssignedDecLevel(CiGetSpan(cis[0], 1)[0]);
+	assert(cis.empty() || all_of(cis.get_span().begin(), cis.get_span().end(), [&](TContradictionInfo& ci) { return CiIsLegal(ci) && GetAssignedDecLevel(CiGetSpanDebug(ci)[0]) == cisMaxDecLevel && GetAssignedDecLevel(CiGetSpanDebug(ci)[1]) == cisMaxDecLevel; }));
+
 	assert(NV(2) || P("***** ProcessDelayedImplication start: diL=" +
 		SLit(diL) + "; otherWatch = " + (otherWatch == BadULit ? "BAD" : SLit(otherWatch)) + "; parent = " + (parentClsInd == BadClsInd ? "BAD" : SLits(Cls(parentClsInd))) + "\n" + STrail() + "\n"));
 
-	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
 		assert(NV(2) || P("************************ ProcessDelayedImplication finish: l=" +
 			SLit(diL) + "; otherWatch = " + (otherWatch == BadULit ? "BAD" : SLit(otherWatch)) + "; parent = " + (parentClsInd == BadClsInd ? "BAD" : SLits(Cls(parentClsInd))) + "\n" + STrail() + "\n"));
 		//assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
-		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TraiAssertConsistency());
+		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		m_Dis.clear();
-		assert(decLevelStart == m_DecLevel || GetAssignedDecLevelVar(m_TrailEnd) != decLevelStart);		
-		if (m_ParamCustomBtStrat > 0 && !decLevelsRecalcBestScore.empty())
+		assert(decLevelStart == m_DecLevel || GetAssignedDecLevelVar(m_TrailEnd) != decLevelStart);
+		if (m_CurrCustomBtStrat > 0 && !decLevelsRecalcBestScore.empty())
 		{
 			for (TUV dl : decLevelsRecalcBestScore)
 			{
 				if (dl <= m_DecLevel && !DecLevelIsCollapsed(dl))
 				{
 					m_BestScorePerDecLevel[dl] = CalcMaxDecLevelScore(dl);
-				}			
+				}
 			}
 		}
 	});
@@ -565,11 +572,11 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 
 		assert(IsSatisfied(diL) && ((otherWatch == BadULit && GetAssignedDecLevel(diL) > 0) || (IsFalsified(otherWatch) && GetAssignedDecLevel(diL) > GetAssignedDecLevel(otherWatch))));
 
-		m_Dis.emplace_back(TDelImpl(diL, otherWatch, parentClsInd));						
+		m_Dis.emplace_back(TDelImpl(diL, otherWatch, parentClsInd));
 		++stat;
 	};
 
-	DisEmplaceBack(diL, otherWatch, parentClsInd, m_Stat.m_DelayedImplicationsTrigerring);	
+	DisEmplaceBack(diL, otherWatch, parentClsInd, m_Stat.m_DelayedImplicationsTrigerring);
 	if (unlikely(IsUnrecoverable())) return false;
 
 	while (!m_Dis.empty())
@@ -577,8 +584,9 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 		diL = m_Dis.back().m_L;
 		parentClsInd = m_Dis.back().m_ParentClsInd;
 		otherWatch = m_Dis.back().m_OtherWatch;
-		auto cls = parentClsInd == BadClsInd ? span<TULit>(&otherWatch, 1) : Cls(parentClsInd);
-		
+		const auto ccs = ConstClsSpan(parentClsInd);
+		const auto cls = parentClsInd == BadClsInd ? span<TULit>(&otherWatch, 1) : (span<TULit>)ccs;
+
 		if (unlikely(otherWatch != BadULit && parentClsInd != BadClsInd && otherWatch != cls[0] && otherWatch != cls[1]))
 		{
 			// This can happen, if l had already been processed during this very invocation of our function and the watch was changed
@@ -587,7 +595,7 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 		}
 
 		m_Dis.pop_back();
-		
+
 		const TUV oldDecLevel = GetAssignedDecLevel(diL);
 		const TUV newDecLevel = otherWatch == BadULit ? 0 : GetAssignedDecLevel(otherWatch);
 
@@ -603,8 +611,8 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 		}
 
 		const bool decisionLevelCollapse = IsAssignedDec(diL);
-		
-		Unassign(diL);		
+
+		Unassign(diL);
 		if (unlikely(decisionLevelCollapse))
 		{
 			++m_Stat.m_DelayedImplicationDecLevelsCollapsed;
@@ -613,9 +621,9 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 				// If l is the only (decision) literal at its decision level, the level will disappear after unassigning l
 				// and propagating the unassignment below (in this invocation of the function)
 				--m_DecLevel;
-			}			
+			}
 		}
-		else if (m_ParamCustomBtStrat > 0 && m_BestScorePerDecLevel[oldDecLevel] == m_VsidsHeap.get_var_score(GetVar(diL)))
+		else if (m_CurrCustomBtStrat > 0 && m_BestScorePerDecLevel[oldDecLevel] == m_VsidsHeap.get_var_score(GetVar(diL)))
 		{
 			decLevelsRecalcBestScore.insert(oldDecLevel);
 		}
@@ -629,14 +637,14 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 			// but then if the conflicting clause turns into an implication in this function, we need to re-propagate l
 			ToPropagatePushBack(diL);
 		}
-		
+
 		TWatchInfo& wi = m_Watches[Negate(diL)];
 		if (wi.IsEmpty())
 		{
 			continue;
 		}
 		const volatile auto allWatches = b.get_ptr(wi.m_WBInd);
-		span<TULit> binWatches = span<TULit>(allWatches + wi.GetLongEntries(), wi.m_BinaryWatches);
+		TSpanTULit binWatches = TSpanTULit(allWatches + wi.GetLongEntries(), wi.m_BinaryWatches);
 
 		for (auto otherWatchLocal : binWatches)
 		{
@@ -657,7 +665,7 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 			// There might be a satisfied literal, which is not yet cached
 			if (IsVisited(diL) && !IsSatisfied(cachedLit))
 			{
-				span<TULit> clsLocal = Cls(clsInd);
+				auto clsLocal = Cls(clsInd);
 				assert(!ClsChunkDeleted(clsInd));
 				auto itSat = find_if(clsLocal.begin(), clsLocal.end(), [&](TULit clsLit) { return IsSatisfied(clsLit) && GetAssignedDecLevel(clsLit) > newDecLevel; });
 				if (itSat != clsLocal.end())
@@ -672,10 +680,10 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 							m_CurrPropWatchModifiedDuringProcessDelayedImplication = true;
 						}
 						SwapWatch(clsInd, watchInd, itSat);
-						
-						if (unlikely(IsUnrecoverable())) return false;						
+
+						if (unlikely(IsUnrecoverable())) return false;
 						// The line below is required to support the (very rare) occasions  of b's realloc actually moving b in WLAddLongWatch
-						clsLocal = Cls(clsInd); currLongWatchPtr = b.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+						currLongWatchPtr = b.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 					}
 				}
 			}
@@ -683,11 +691,11 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 			// unless BCP hasn't been completed for l, which is handled by the code above
 			if (IsSatisfied(cachedLit))
 			{
-				span<TULit> clsLocal = Cls(clsInd);
+				auto clsLocal = Cls(clsInd);
 				assert(!ClsChunkDeleted(clsInd));
 				// Making sure, l is the first literal in the clause
 				if (clsLocal[1] == Negate(diL)) swap(clsLocal[0], clsLocal[1]);
-				assert(clsLocal[0] == Negate(diL));		
+				assert(clsLocal[0] == Negate(diL));
 
 				// Going over the rest of the clause (that is, skipping the watches) to find the best WL candidate to swap with l
 				auto bestWLCandIt = FindBestWLCand(clsLocal, initDl);
@@ -715,7 +723,7 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 						{
 							DisEmplaceBack(cachedLit, Negate(diL), clsInd, m_Stat.m_DelayedImplicationsPropagated);
 						}
-						if (unlikely(IsUnrecoverable())) return false;					
+						if (unlikely(IsUnrecoverable())) return false;
 					}
 					else
 					{
@@ -743,31 +751,32 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 		// (3) If there was a change, manages the backtrack level and whether that level is contradictory
 		bool anyChange = false;
 		bool isBacktrackLevelContradictory = false;
-		TUV backtrackLevel = numeric_limits<TUV>::max();	
+		TUV backtrackLevel = numeric_limits<TUV>::max();
 
 		auto cisSpan = cis.get_span();
 		for (TContradictionInfo& ci : cisSpan)
 		{
-			span<TULit> ciSpan = CiGetSpan(ci);
+			const auto ciSpan = CiGetSpan(ci);
 
-			assert(NV(2) || P("Delayed implication contradiction handling start; clause: " + SLits(ciSpan) + "\n"));
+			assert(NV(2) || P("Delayed implication contradiction handling start; clause: " + SLits((span<TULit>)ciSpan) + "\n"));
 
 			if (!ci.m_IsContradictionInBinaryCls)
-			{				
+			{
 				auto SwapWatchWithMaxNonWLIfRequired = [&](bool watchInd)
 				{
-					auto maxNonWLDecLevelIt = GetAssignedLitsHighestDecLevelIt(ciSpan, 2);
+					auto cls = Cls(ci.m_ParentClsInd);
+					auto maxNonWLDecLevelIt = GetAssignedLitsHighestDecLevelIt(cls, 2);
 					const TULit litMaxDecLevel = *maxNonWLDecLevelIt;
 					const TUV maxDecLevel = GetAssignedDecLevel(litMaxDecLevel);
 
 					if (maxDecLevel > GetAssignedDecLevel(ciSpan[watchInd]))
 					{
-						if (unlikely(Cls(ci.m_ParentClsInd)[watchInd] == Negate(m_CurrentlyPropagatedLit)))
+						if (unlikely(cls[watchInd] == Negate(m_CurrentlyPropagatedLit)))
 						{
 							m_CurrPropWatchModifiedDuringProcessDelayedImplication = true;
 						}
-						SwapWatch(ci.m_ParentClsInd, watchInd, maxNonWLDecLevelIt);						
-						if (unlikely(Cls(ci.m_ParentClsInd)[watchInd] == Negate(m_CurrentlyPropagatedLit)))
+						SwapWatch(ci.m_ParentClsInd, watchInd, maxNonWLDecLevelIt);
+						if (unlikely(cls[watchInd] == Negate(m_CurrentlyPropagatedLit)))
 						{
 							m_CurrPropWatchModifiedDuringProcessDelayedImplication = true;
 						}
@@ -780,14 +789,14 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 			}
 
 			const bool currChanged = GetAssignedDecLevel(ciSpan[0]) != cisMaxDecLevel || GetAssignedDecLevel(ciSpan[1]) != cisMaxDecLevel;
-			assert(NV(2) || P("Delayed implication contradiction handling end; clause: " + SLits(ciSpan) + "; changed? = " + to_string(currChanged) + "\n"));
+			assert(NV(2) || P("Delayed implication contradiction handling end; clause: " + SLits((span<TULit>)ciSpan) + "; changed? = " + to_string(currChanged) + "\n"));
 
 			if (currChanged)
 			{
 				anyChange = true;
 				const bool currContradictory = GetAssignedDecLevel(ciSpan[0]) == GetAssignedDecLevel(ciSpan[1]);
 				const TUV currBacktrackLevel = currContradictory ? GetAssignedDecLevel(ciSpan[0]) : max(GetAssignedDecLevel(ciSpan[0]), GetAssignedDecLevel(ciSpan[1])) - 1;
-				
+
 				if (currBacktrackLevel < backtrackLevel)
 				{
 					backtrackLevel = currBacktrackLevel;
@@ -803,12 +812,12 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 		if (anyChange)
 		{
 			BCPBacktrack(backtrackLevel, isBacktrackLevelContradictory);
-			
+
 			// Assign any units and mark for removal
 			auto cisSpanLocal = cis.get_span();
 			for (TContradictionInfo& ci : cisSpanLocal)
 			{
-				span<TULit> ciSpan = CiGetSpan(ci);
+				const auto ciSpan = CiGetSpan(ci, 2);
 
 				// Note that, in a contradiction, one of the watches may have become satisfied after assigning a delayed implication for an earlier former contradiction
 				// hence the condition IsAssigned(ciSpan[0]) != IsAssigned(ciSpan[1]) in the if below wouldn't have been sufficient
@@ -823,7 +832,7 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 						// Otherwise a *correctness* bug is possible, since the following condition, required for the correctness of ProcessDelayedImplication would not hold:
 						// It is guaranteed that if the clause is satisfied with 1 literal and the rest are falsified, that literal must be cached by the falsified watch
 						WLSetCached(assignedLit, ci.m_ParentClsInd, unassignedLit);
-					}					
+					}
 					Assign(unassignedLit, ci.m_IsContradictionInBinaryCls ? BadClsInd : ci.m_ParentClsInd, assignedLit, GetAssignedDecLevel(assignedLit));
 					// Marking the ci to be removed after this loop
 					ci.m_IsContradiction = false;
@@ -842,8 +851,12 @@ bool CTopi::ProcessDelayedImplication(TULit diL, TULit otherWatch, TUInd parentC
 			});
 
 			return m_CurrentlyPropagatedLit == BadULit ? false : isBacktrackLevelContradictory ? propagatedDecLevel >= backtrackLevel : propagatedDecLevel > backtrackLevel;
-		}		
+		}
 	}
 
 	return false;
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

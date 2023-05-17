@@ -9,6 +9,16 @@
 #include <limits>
 #include <cstring>
 
+// Defining likely/unlikely for helping branch prediction. 
+// Will replace by C++20's [[likely]]/[[unlikely]] attributes, once properly and consistently implemented in both GCC and VS
+#ifdef _WIN32
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+#else
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
+#endif
+
 using namespace std;
 
 namespace Topor
@@ -17,9 +27,9 @@ namespace Topor
 	{
 	public:
 		CDynArray(size_t initCap = 0) : m_Cap(initCap), m_B(initCap > MaxCapacity || initCap == 0 ? nullptr : (T*)malloc(initCap* TSize)) {}
-		CDynArray(size_t initCap, size_t initVal) : m_Cap(initCap), m_B(InitAlloc(initCap, initVal)) {}
+		CDynArray(size_t initCap, unsigned char initVal) : m_Cap(initCap), m_B(InitAlloc(initCap, initVal)) {}
 		// Copy constructor
-		CDynArray(const CDynArray& da) : CDynArray(da.m_Cap, da.m_Multiplier)
+		CDynArray(const CDynArray& da) : CDynArray(da.m_Cap)
 		{ 
 			if (unlikely(uninitialized_or_erroneous()))
 			{
@@ -57,12 +67,19 @@ namespace Topor
 			m_Multiplier = da.m_Multiplier;
 			da.m_B = nullptr;
 			da.m_Cap = 0;
+			da.m_Multiplier = 0;
 			return *this;
 		}
 		
 		~CDynArray() { free(m_B); }
-		
+
+#ifdef _WIN32
 		void reserve_exactly(size_t newCap)
+#else
+		// Preventing inlining is required to work around an apparent GCC bug, manifesting itself in the following error:
+		// error: argument 2 range [9223372036854775808, 18446744073709551608] exceeds maximum object size 9223372036854775807 [-Werror=alloc-size-larger-than=] auto tmp = (T*)realloc(m_B, s);
+		void __attribute__((noinline)) reserve_exactly(size_t newCap)
+#endif
 		{
 			if (newCap > MaxCapacity || newCap == 0)
 			{
@@ -82,7 +99,7 @@ namespace Topor
 			}			
 		}
 
-		void reserve_exactly(size_t newCap, size_t initVal)
+		void reserve_exactly(size_t newCap, unsigned char initVal)
 		{
 			if (newCap > MaxCapacity || newCap == 0)
 			{
@@ -95,7 +112,7 @@ namespace Topor
 			}
 			else
 			{
-				auto tmp = (T*)realloc(m_B, newCap * TSize);
+				auto tmp = (T*)realloc((void*)m_B, newCap * TSize);
 				if (unlikely(tmp == nullptr))
 				{
 					ClearB();
@@ -123,13 +140,13 @@ namespace Topor
 			reserve_exactly(tentativeNewCap > maxCap ? maxCap : tentativeNewCap);
 		}
 
-		void reserve_atleast_with_max(size_t newCap, size_t maxCap, size_t initVal)
+		void reserve_atleast_with_max(size_t newCap, size_t maxCap, unsigned char initVal)
 		{
 			const auto tentativeNewCap = GetNewCap(newCap);
 			reserve_exactly(tentativeNewCap > maxCap ? maxCap : tentativeNewCap, initVal);
 		}
 
-		void reserve_atleast(size_t newCap, size_t initVal)
+		void reserve_atleast(size_t newCap, unsigned char initVal)
 		{
 			reserve_exactly(GetNewCap(newCap), initVal);
 		}
@@ -149,12 +166,12 @@ namespace Topor
 			}
 		}
 
-		void memset(size_t newVal, size_t startIndIncl = 0)
+		void memset(unsigned char newVal, size_t startIndIncl = 0)
 		{
 			memset(newVal, startIndIncl, m_Cap);
 		}
 
-		void memset(size_t newVal, size_t startIndIncl, size_t endIndExcl)
+		void memset(unsigned char newVal, size_t startIndIncl, size_t endIndExcl)
 		{
 			assert(startIndIncl < endIndExcl && endIndExcl <= cap());
 			std::memset((void*)(m_B + startIndIncl), newVal, (endIndExcl - startIndIncl) * TSize);			
@@ -225,21 +242,25 @@ namespace Topor
 			return m_B + i;
 		}
 
-		inline T& operator [](size_t i)
+		inline T& operator [](size_t i) const
 		{ 
 			assert(i < cap());
 			return m_B[i]; 
 		}
 
-		inline T operator [](size_t i) const
-		{
-			assert(i < cap());
-			return m_B[i];
-		}
-
 		inline const size_t& cap() const
 		{
 			return m_Cap;
+		}
+
+		inline size_t memMb() const
+		{
+			return (m_Cap * TSize) / 1000;
+		}
+
+		inline const bool empty() const 
+		{
+			return cap() == 0;
 		}
 
 		inline bool uninitialized_or_erroneous() const { return m_B == nullptr; }		
@@ -258,7 +279,8 @@ namespace Topor
 			reserve_exactly(currIndWrite);
 		}
 
-		void Compress(TUInd startInd, TUInd& endInd, function<bool(TUInd clsInd)> IsChunkDeleted, function<TUInd(TUInd clsInd)> ChunkEnd,
+		template <typename TUInd>
+		void RemoveGarbage(TUInd startInd, TUInd& endInd, function<bool(TUInd clsInd)> IsChunkDeleted, function<TUInd(TUInd clsInd)> ChunkEnd,
 			function<void(TUInd oldWlInd, TUInd newWlInd)> NotifyAboutRemainingChunkMove = nullptr)
 		{
 			auto FindNextDeleted = [&](TUInd firstInd, TUInd lastInd, function<bool(TUInd clsInd)> IsChunkDeleted, function<TUInd(TUInd clsInd)> ChunkEnd, TUInd toInd = numeric_limits<T>::max(), function<void(TUInd oldWlInd, TUInd newWlInd)> NotifyAboutRemainingChunkMove = nullptr)
@@ -304,11 +326,12 @@ namespace Topor
 		}
 
 		static constexpr double MultiplierDef = 1.625;
-		inline void SetMultiplier(double multiplier) { assert(multiplier >= 1.);  m_Multiplier = multiplier; }
+		inline void SetMultiplier(double multiplier = MultiplierDef) { assert(multiplier >= 1.);  m_Multiplier = multiplier; }
+		inline double GetMultiplier() const { return m_Multiplier; }
 	protected:
 		static constexpr size_t TSize = sizeof(T);
 		static constexpr size_t MaxCapacity = (std::numeric_limits<size_t>::max)() / TSize;		
-		T* InitAlloc(size_t initCap, size_t initVal) 
+		T* InitAlloc(size_t initCap, unsigned char initVal) 
 		{
 			// #topor: are there more page-fault-friendly ways to allocate: (1) 0-initialized memory; (2) non-initialized memory?
 			// For non-initialized memory, see: https://stackoverflow.com/questions/56411164/can-i-ask-the-kernel-to-populate-fault-in-a-range-of-anonymous-pages

@@ -11,7 +11,8 @@
 using namespace Topor;
 using namespace std;
 
-bool CTopi::WLBinaryWatchExists(TULit l, TULit otherWatch)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::WLBinaryWatchExists(TULit l, TULit otherWatch)
 {
 	assert(l < m_Watches.cap());
 	assert(otherWatch < m_Watches.cap());
@@ -20,16 +21,17 @@ bool CTopi::WLBinaryWatchExists(TULit l, TULit otherWatch)
 	{
 		return false;
 	}
-	const span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+	const TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 	return find(binWatches.begin(), binWatches.end(), otherWatch) != binWatches.end();
 }
 
-void CTopi::WLRemoveBinaryWatch(TULit l, TULit otherWatch)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLRemoveBinaryWatch(TULit l, TULit otherWatch)
 {
 	assert(WLBinaryWatchExists(l, otherWatch));
 
 	TWatchInfo& wi = m_Watches[l];
-	span<TULit> binWatches = span<TULit>(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
+	TSpanTULit binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
 	auto it = find(binWatches.begin(), binWatches.end(), otherWatch);
 	*it = binWatches.back();
 
@@ -37,7 +39,8 @@ void CTopi::WLRemoveBinaryWatch(TULit l, TULit otherWatch)
 	--wi.m_BinaryWatches;
 }
 
-void CTopi::WLAddBinaryWatch(TULit l, TULit otherWatch)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLAddBinaryWatch(TULit l, TULit otherWatch)
 {
 	assert(l < m_Watches.cap());
 	assert(otherWatch < m_Watches.cap());
@@ -55,7 +58,8 @@ void CTopi::WLAddBinaryWatch(TULit l, TULit otherWatch)
 	++m_Watches[l].m_BinaryWatches;
 }
 
-size_t CTopi::WLGetLongWatchInd(TULit l, TUInd clsInd)
+template <typename TLit, typename TUInd, bool Compress>
+size_t CTopi<TLit, TUInd, Compress>::WLGetLongWatchInd(TULit l, TUInd clsInd)
 {
 	// Go over the long watches
 	TWatchInfo& wi = m_Watches[l];
@@ -71,7 +75,8 @@ size_t CTopi::WLGetLongWatchInd(TULit l, TUInd clsInd)
 	return numeric_limits<size_t>::max();
 }
 
-void CTopi::WLSetCached(TULit l, TUInd clsInd, TULit cachedLit)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLSetCached(TULit l, TUInd clsInd, TULit cachedLit)
 {
 	// Go over the long watches
 	TWatchInfo& wi = m_Watches[l];
@@ -88,7 +93,26 @@ void CTopi::WLSetCached(TULit l, TUInd clsInd, TULit cachedLit)
 	assert(0);
 }
 
-void CTopi::WLRemoveLongWatch(TULit l, size_t longWatchInd)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLReplaceInd(TULit l, TUInd clsInd, TUInd newClsInd)
+{
+	// Go over the long watches
+	TWatchInfo& wi = m_Watches[l];
+	for (auto [currLongWatchInd, currLongWatchPtr] = make_pair((size_t)0, m_W.get_ptr(wi.m_WBInd)); currLongWatchInd < wi.m_LongWatches; ++currLongWatchInd, currLongWatchPtr += TWatchInfo::BinsInLong)
+	{
+		TUInd& currClsInd = *(TUInd*)(currLongWatchPtr + 1);
+		if (currClsInd == clsInd)
+		{
+			currClsInd = newClsInd;
+			return;
+		}
+	}
+
+	assert(0);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLRemoveLongWatch(TULit l, size_t longWatchInd)
 {
 	assert(l < m_Watches.cap());
 
@@ -125,17 +149,18 @@ void CTopi::WLRemoveLongWatch(TULit l, size_t longWatchInd)
 			{
 				memcpy(&watchArena[wi.GetLongEntries()], &watchArena[wi.GetUsedEntries() + TWatchInfo::BinsInLong - wi.m_BinaryWatches], wi.m_BinaryWatches * sizeof(TULit));
 			}
-			
+
 		}
-		
+
 		break;
 	}
 }
 
-void CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 {
 	assert(l < m_Watches.cap());
-	assert(clsInd < m_B.cap());
+	assert(Compress || clsInd < m_B.cap());
 
 	// Prepare the watch arena for our literal
 	TULit* watchArena = WLPrepareArena(l, false, true);
@@ -145,7 +170,7 @@ void CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 
 	// Add the long watch
 	TWatchInfo& wi = m_Watches[l];
-	
+
 	// Free space by moving binary watches, if required
 	switch (wi.m_BinaryWatches)
 	{
@@ -171,7 +196,7 @@ void CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 			}
 		}
 		break;
-	}	
+	}
 
 	// Insert the long watch
 	auto indBeyondLongWatches = wi.GetLongEntries();
@@ -182,14 +207,16 @@ void CTopi::WLAddLongWatch(TULit l, TULit inlinedLit, TUInd clsInd)
 	++wi.m_LongWatches;
 }
 
-TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLongWatch)
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::TULit* CTopi<TLit, TUInd, Compress>::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLongWatch)
 {
 	TWatchInfo& wi = m_Watches[l];
-	
+
 	auto AllocateNewArenaAndCopyOldArenaIfAny = [&](TUInd sz) -> TULit*
 	{
 		TUInd allocatedWordsRequired = m_WNext + sz;
-		if (unlikely(allocatedWordsRequired < m_WNext))
+		if (unlikely(allocatedWordsRequired < m_WNext) || 
+			((double)(m_WWasted + m_WNext) > (double)m_WNext * m_ParamMultWasteWatches))
 		{
 			CompressWLs();
 			allocatedWordsRequired = m_WNext + sz;
@@ -199,15 +226,15 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 				return nullptr;
 			}
 		}
-	
+
 
 		m_W.reserve_beyond_if_requried(allocatedWordsRequired, true);
 		if (unlikely(m_W.uninitialized_or_erroneous()))
 		{
 			SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "BReallocBeyond: couldn't reserve m_B");
 			return nullptr;
-		}		
-		
+		}
+
 		if (!wi.IsEmpty())
 		{
 			m_W.memcpy(m_WNext, wi.m_WBInd, wi.GetUsedEntries());
@@ -221,7 +248,7 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 
 	const TUInd currRequiredEntries = (TUInd)allowNewBinaryWatch + ((TUInd)allowNewLongWatch * TWatchInfo::BinsInLong);
 	if (unlikely(wi.IsEmpty()))
-	{		
+	{
 		return AllocateNewArenaAndCopyOldArenaIfAny(m_ParamInitEntriesPerWL < currRequiredEntries ? bit_ceil(currRequiredEntries) : m_ParamInitEntriesPerWL);
 	}
 
@@ -250,10 +277,11 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 		return nullptr;
 	}
 
+	m_WWasted += wi.m_AllocatedEntries;
 	return AllocateNewArenaAndCopyOldArenaIfAny(wi.m_AllocatedEntries << 1);
 }
 
-/*bool CTopi::WLAssertConsistency(bool testMissedImplications)
+/*bool CTopi<TLit,TUInd,Compress>::WLAssertConsistency(bool testMissedImplications)
 {
 	using TBinCls = pair<TULit, TULit>;
 
@@ -268,14 +296,14 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 
 		if (binaryWatches != 0)
 		{
-			span<TULit> binWatches = m_W.get_span_cap(wi.m_BInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+			TSpanTULit binWatches = m_W.get_span_cap(wi.m_BInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				assert(secondLit != 0);
 				assert(secondLit < GetNextLit());
 				TBinCls clsBinCls = make_pair(l, secondLit);
 				array<TULit, 2> clsArray = { clsBinCls.first, clsBinCls.second };
-				span<TULit> cls(clsArray);
+				TSpanTULit cls(clsArray);
 				if (testMissedImplications && (IsFalsified(cls[0]) || IsFalsified(cls[1])))
 				{
 					if (IsFalsified(cls[0]) && IsFalsified(cls[1])) cout << "***ASSERTION-FAILURE FF-for-binary at " << SLits(cls) << endl << STrail() << endl;
@@ -298,7 +326,8 @@ TULit* CTopi::WLPrepareArena(TULit l, bool allowNewBinaryWatch, bool allowNewLon
 	return true;
 }*/
 
-bool CTopi::WLAssertNoMissedImplications()
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::WLAssertNoMissedImplications()
 {
 	auto& b = m_W;
 	for (TUVar v = m_TrailStart; v != BadUVar; v = m_VarInfo[v].m_TrailNext)
@@ -322,13 +351,13 @@ bool CTopi::WLAssertNoMissedImplications()
 
 		if (binaryWatches != 0)
 		{
-			span<TULit> binWatches = b.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+			TSpanTULit binWatches = b.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				assert(secondLit != 0);
 				assert(secondLit < GetNextLit());
 				array<TULit, 2> clsArray = { l, secondLit };
-				span<TULit> cls(clsArray);
+				TSpanTULit cls(clsArray);
 				if (IsFalsified(cls[0]) || IsFalsified(cls[1]))
 				{
 					if (IsFalsified(cls[0]) && IsFalsified(cls[1])) cout << "***ASSERTION-FAILURE FF-for-binary at " << SLits(cls) << endl << STrail() << endl;
@@ -352,12 +381,15 @@ bool CTopi::WLAssertNoMissedImplications()
 			[[maybe_unused]] const TULit cachedLit = *currLongWatchPtr;
 
 			const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);
-			assert(clsInd < m_B.cap() - 1);
+			assert(Compress || clsInd < m_B.cap() - 1);
 
-			const auto cls = Cls(clsInd);
+			const auto cls = ConstClsSpan(clsInd);
 
-			if (!(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd))) cout << "***ASSERTION-FAILURE First-Learnt at " << SLits(cls) << endl << STrail() << endl;
-			assert(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
+			if constexpr (!Compress)
+			{
+				if (!(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd))) cout << "***ASSERTION-FAILURE First-Learnt at " << SLits(cls) << endl << STrail() << endl;
+				assert(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
+			}
 
 			assert(cls[0] == l || cls[1] == l);
 			if (find(cls.begin(), cls.end(), cachedLit) == cls.end())
@@ -402,15 +434,16 @@ bool CTopi::WLAssertNoMissedImplications()
 					if (!(it != cls.end())) cout << "***ASSERTION-FAILURE FF at " << SLits(cls) << endl << STrail() << endl;
 					assert(it != cls.end());
 				}
-			}			
+			}
 		}
 	}
 
 	return true;
 }
 
-bool CTopi::WLAssertConsistency(bool testMissedImplications)
-{	
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::WLAssertConsistency(bool testMissedImplications)
+{
 	if (m_ParamAssertConsistency < 3)
 	{
 		return testMissedImplications ? WLAssertNoMissedImplications() : true;
@@ -422,7 +455,7 @@ bool CTopi::WLAssertConsistency(bool testMissedImplications)
 
 	using TBinCls = pair<TULit, TULit>;
 
-	struct hash_pair {		
+	struct hash_pair {
 		size_t operator()(const TBinCls& p) const
 		{
 			auto hash1 = hash<TULit>{}(p.first);
@@ -454,7 +487,7 @@ bool CTopi::WLAssertConsistency(bool testMissedImplications)
 
 		if (binaryWatches != 0)
 		{
-			span<TULit> binWatches = b.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+			TSpanTULit binWatches = b.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 			for (TULit secondLit : binWatches)
 			{
 				assert(secondLit != 0);
@@ -463,7 +496,7 @@ bool CTopi::WLAssertConsistency(bool testMissedImplications)
 				assert(binClssTwice.find(clsBinCls) == binClssTwice.end());
 				binClssTwice.insert(clsBinCls);
 				array<TULit, 2> clsArray = { clsBinCls.first, clsBinCls.second };
-				span<TULit> cls(clsArray);
+				TSpanTULit cls(clsArray);
 				if (testMissedImplications && (IsFalsified(cls[0]) || IsFalsified(cls[1])))
 				{
 					if (IsFalsified(cls[0]) && IsFalsified(cls[1])) cout << "***ASSERTION-FAILURE FF-for-binary at " << SLits(cls) << endl << STrail() << endl;
@@ -481,30 +514,33 @@ bool CTopi::WLAssertConsistency(bool testMissedImplications)
 				}
 			}
 		}
-	
+
 		for (auto [currLongWatchInd, currLongWatchPtr] = make_pair((size_t)0, b.get_ptr(wi.m_WBInd)); currLongWatchInd < wi.m_LongWatches; ++currLongWatchInd, currLongWatchPtr += TWatchInfo::BinsInLong)
 		{
 			[[maybe_unused]] const TULit cachedLit = *currLongWatchPtr;
-			
-			const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);			
-			assert(clsInd < m_B.cap() - 1);
 
-			const auto cls = Cls(clsInd);		
+			const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);
+			assert(Compress || clsInd < m_B.cap() - 1);
 
-			if (!(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd))) cout << "***ASSERTION-FAILURE First-Learnt at " << SLits(cls) << endl << STrail() << endl;
-			assert(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
+			const auto cls = ConstClsSpan(clsInd);
+
+			if constexpr (!Compress)
+			{
+				if (!(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd))) cout << "***ASSERTION-FAILURE First-Learnt at " << SLits(cls) << endl << STrail() << endl;
+				assert(clsInd >= m_FirstLearntClsInd || !ClsGetIsLearnt(clsInd));
+			}
 
 			assert(cls[0] == l || cls[1] == l);
 			if (!(find(cls.begin(), cls.end(), cachedLit) != cls.end())) cout << "***ASSERTION-FAILURE F- at " << SLits(cls) << endl << STrail() << endl;
 			assert(find(cls.begin(), cls.end(), cachedLit) != cls.end());
-			
+
 			if (testMissedImplications && (IsFalsified(cls[0]) || IsFalsified(cls[1])))
 			{
 				const TULit falseLit = cls[IsFalsified(cls[1])];
 				const TUV falseLitDecLevel = GetAssignedDecLevel(falseLit);
 				const TULit otherLit = cls[!IsFalsified(cls[1])];
 				const TUV otherLitDecLevel = IsAssigned(otherLit) ? GetAssignedDecLevel(otherLit) : BadUVar;
-				
+
 				if (IsSatisfied(otherLit))
 				{
 					auto it = find_if(cls.begin() + 2, cls.end(), [&](TULit l)
@@ -561,12 +597,13 @@ bool CTopi::WLAssertConsistency(bool testMissedImplications)
 		const TULit l2 = binCls.second;
 		[[maybe_unused]] const TBinCls binClsReversed = make_pair(l2, l1);
 		assert(find(binClssTwice.begin(), binClssTwice.end(), binClsReversed) != binClssTwice.end());
-	}	
+	}
 
 	return true;
 }
 
-bool CTopi::WLIsLitBetter(TULit lCand, TULit lOther) const
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::WLIsLitBetter(TULit lCand, TULit lOther) const
 {
 	const auto lCandWLEntries = m_ParamBCPWLChoice == 0 ? m_Watches[lCand].GetUsedEntries() : m_ParamBCPWLChoice == 1 ? m_Watches[lOther].GetUsedEntries() : 1;
 	const auto lOtherWLEntries = m_ParamBCPWLChoice == 0 ? m_Watches[lOther].GetUsedEntries() : m_ParamBCPWLChoice == 1 ? m_Watches[lCand].GetUsedEntries() : 0;
@@ -610,3 +647,7 @@ bool CTopi::WLIsLitBetter(TULit lCand, TULit lOther) const
 			(GetAssignedDecLevel(lCand) == GetAssignedDecLevel(lOther) && lCandWLEntries < lOtherWLEntries);
 	}
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

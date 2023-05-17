@@ -6,7 +6,8 @@
 using namespace Topor;
 using namespace std;
 
-TULit CTopi::Decide()
+template <typename TLit, typename TUInd, bool Compress>
+CTopi<TLit, TUInd, Compress>::TULit CTopi<TLit,TUInd,Compress>::Decide()
 {
 	// #topor : we should try other decision heuristics
 	// Maple uses DISTANCE for the first 50000 conflicts, then switches between VSIDS and LRB
@@ -25,7 +26,8 @@ TULit CTopi::Decide()
 	return BadULit;
 }
 
-bool CTopi::GetNextPolarityIsNegated(TUVar v)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit,TUInd,Compress>::GetNextPolarityIsNegated(TUVar v)
 {
 	assert(!IsAssignedVar(v));
 	if (IsNotForced(v))
@@ -38,7 +40,8 @@ bool CTopi::GetNextPolarityIsNegated(TUVar v)
 	}	
 }
 
-void CTopi::UpdateDecisionStrategyOnNewConflict(TUV glueLearnt, TUVar lowestGlueUpdateVar, TUVar fakeTrailEnd)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::UpdateDecisionStrategyOnNewConflict(TUV glueLearnt, TUVar lowestGlueUpdateVar, TUVar fakeTrailEnd)
 {
 	auto D1LowerOrEqD2UpToPrecision = [](double d1, double d2)
 	{
@@ -78,7 +81,8 @@ void CTopi::UpdateDecisionStrategyOnNewConflict(TUV glueLearnt, TUVar lowestGlue
 	m_VsidsHeap.var_inc_update(m_Stat.m_VarDecay);
 }
 
-void CTopi::DecisionInit()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::DecisionInit()
 {
 	assert(m_QueryCurr != TQueryType::QUERY_NONE);
 	if ((m_QueryCurr == TQueryType::QUERY_INIT) || (m_QueryCurr == TQueryType::QUERY_INC_NORMAL && m_ParamVarActivityIncDecayReinitN) || 
@@ -95,12 +99,21 @@ void CTopi::DecisionInit()
 	{
 		m_CurrInitClssBoostScoreMult = InitClssBoostScoreStratIsReversedOrder() ? m_ParamInitClssBoostMultLowest : m_ParamInitClssBoostMultHighest;
 	}
+
+	if (m_ParamRandomizePolarityAtEachIncrementalCall && m_Stat.m_SolveInvs > 1)
+	{
+		for (TUVar v = 1; v < GetNextVar(); ++v)
+		{
+			FixPolarityInternal(GetLit(v, (bool)(rand() % 2)), true);
+		}
+	}
 }
 
-void CTopi::UpdateScoreVar(TUVar v, double mult)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit,TUInd,Compress>::UpdateScoreVar(TUVar v, double mult)
 {
 	const bool isRescaled = m_VsidsHeap.increase_score(v, mult);
-	if (m_ParamCustomBtStrat > 0)
+	if (m_CurrCustomBtStrat > 0)
 	{
 		if (isRescaled)
 		{
@@ -118,7 +131,7 @@ void CTopi::UpdateScoreVar(TUVar v, double mult)
 			if (decLevel >= m_BestScorePerDecLevel.cap())
 			{
 				assert(decLevel <= GetNextVar());
-				ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_ParamCustomBtStrat in UpdateScoreVar");
+				ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_BestScorePerDecLevel in UpdateScoreVar");
 				if (unlikely(IsUnrecoverable())) return;
 			}
 
@@ -132,3 +145,7 @@ void CTopi::UpdateScoreVar(TUVar v, double mult)
 		}
 	}
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

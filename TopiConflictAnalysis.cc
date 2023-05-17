@@ -10,7 +10,8 @@
 using namespace Topor;
 using namespace std;
 
-TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
+template <typename TLit, typename TUInd, bool Compress>
+TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls, bool isLearnt)
 {
 	if (isLearnt && IsCbLearntOrDrat())
 	{
@@ -18,9 +19,9 @@ TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
 	}
 
 	TUInd clsStart = BadClsInd;
-		
+
 	if (cls.size() == 2)
-	{		
+	{
 		if (m_ParamExistingBinWLStrat == 2 || !WLBinaryWatchExists(cls[0], cls[1]))
 		{
 			m_Stat.NewClause(cls.size(), isLearnt);
@@ -35,7 +36,7 @@ TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
 			if (m_ParamExistingBinWLStrat == 1)
 			{
 				UpdateScoreVar(GetVar(cls[0]), m_ParamBinWLScoreBoostFactor);
-				UpdateScoreVar(GetVar(cls[1]), m_ParamBinWLScoreBoostFactor);				
+				UpdateScoreVar(GetVar(cls[1]), m_ParamBinWLScoreBoostFactor);
 			}
 		}
 	}
@@ -49,56 +50,70 @@ TUInd CTopi::AddClsToBufferAndWatch(span<TULit> cls, bool isLearnt)
 
 		WLAddLongWatch(cls[1], cls[0]);
 		if (unlikely(IsUnrecoverable())) return clsStart;
-		
-		const array<TUInd, 2> clsIndPtrs = { LastWLEntry(cls[0]), LastWLEntry(cls[1]) };
 
-		const bool isOversized = isLearnt && cls.size() > ClsLearntMaxSizeWithGlue;
-
-		const TUInd newBNext = m_BNext + (TUInd)cls.size() + ClsLitsStartOffset(isLearnt, isOversized);
-
-		if (unlikely(newBNext < m_BNext))
+		auto PointFromWatches = [&](TUInd clsInd)
 		{
-			SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, "AddClsToBufferAndWatch: too many literals in all the clauses combined");
-			return clsStart;
-		}
+			const array<TUInd, 2> clsIndPtrs = { LastWLEntry(cls[0]), LastWLEntry(cls[1]) };
+			*((TUInd*)(m_W.get_ptr() + clsIndPtrs[0])) = *((TUInd*)(m_W.get_ptr() + clsIndPtrs[1])) = clsInd;
+			return clsInd;
+		};
 
-		if (unlikely(newBNext >= m_B.cap()))
+		if constexpr (!Compress)
 		{
-			m_B.reserve_atleast(newBNext);
-			if (unlikely(m_B.uninitialized_or_erroneous()))
+			const bool isOversized = isLearnt && cls.size() > ClsLearntMaxSizeWithGlue;
+
+			const TUInd newBNext = m_BNext + (TUInd)cls.size() + EClsLitsStartOffset(isLearnt, isOversized);
+
+			if (unlikely(newBNext < m_BNext))
 			{
-				SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "AddClsToBufferAndWatch: couldn't reserve the buffer");
+				SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, "AddClsToBufferAndWatch: too many literals in all the clauses combined");
 				return clsStart;
 			}
-		}
 
-		// The clause will start at m_BNext; point to it correctly from both watches
-		clsStart = *((TUInd*)(m_W.get_ptr() + clsIndPtrs[0])) = *((TUInd*)(m_W.get_ptr() + clsIndPtrs[1])) = m_BNext;
-		// Order of setting the fields is important, since ClsSetSize depends on ClsSetSize and ClsSetGlue depends on both
-		ClsSetIsLearnt(m_BNext, isLearnt);
-		ClsSetSize(m_BNext, (TUV)cls.size());		
-		if (isLearnt)
-		{
-			ClsSetGlue(m_BNext, GetGlueAndMarkCurrDecLevels(cls));	
-			if (unlikely(m_BNext < m_FirstLearntClsInd))
+			if (unlikely(newBNext >= m_B.cap()))
 			{
-				m_FirstLearntClsInd = m_BNext;
+				m_B.reserve_atleast(newBNext);
+				if (unlikely(m_B.uninitialized_or_erroneous()))
+				{
+					SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "AddClsToBufferAndWatch: couldn't reserve the buffer");
+					return clsStart;
+				}
 			}
-			if (m_ParamClsDelStrategy > 0)
+
+			// The clause will start at m_BNext; point to it correctly from both watches
+			clsStart = PointFromWatches(m_BNext);
+			// Order of setting the fields is important, since ClsSetSize depends on ClsSetSize and ClsSetGlue depends on both
+			EClsSetIsLearnt(m_BNext, isLearnt);
+			ClsSetSize(m_BNext, (TUV)cls.size());
+			if (isLearnt)
 			{
-				ClsSetActivityAndSkipdelTo0(m_BNext);
-			}			
-		}		
-		// Copy the clause from the input span
-		memcpy(m_B.get_ptr(m_BNext + ClsLitsStartOffset(isLearnt, isOversized)), &cls[0], cls.size() * sizeof(cls[0]));
-		// Update m_BNext
-		m_BNext = newBNext;
+				ClsSetGlue(m_BNext, GetGlueAndMarkCurrDecLevels(cls));
+				if (unlikely(m_BNext < m_FirstLearntClsInd))
+				{
+					m_FirstLearntClsInd = m_BNext;
+				}
+				if (m_ParamClsDelStrategy > 0)
+				{
+					ClsSetActivityAndSkipdelTo0(m_BNext);
+				}
+			}
+			// Copy the clause from the input span
+			memcpy(m_B.get_ptr(m_BNext + EClsLitsStartOffset(isLearnt, isOversized)), &cls[0], cls.size() * sizeof(cls[0]));
+			// Update m_BNext
+			m_BNext = newBNext;
+		}
+		else
+		{
+			clsStart = PointFromWatches(BCCompress(cls, isLearnt, isLearnt ? GetGlueAndMarkCurrDecLevels(cls) : 0));
+		}
 	}
 
 	return clsStart;
+
 }
 
-void CTopi::UpdateAllUipInfoAfterRestart()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::UpdateAllUipInfoAfterRestart()
 {
 	if (m_ParamAllUipMode == 0 || m_Stat.m_Restarts <= m_ParamAllUipFirstRestart || (m_ParamAllUipLastRestart != numeric_limits<uint32_t>::max() && m_Stat.m_Restarts >= m_ParamAllUipLastRestart))
 	{
@@ -106,24 +121,25 @@ void CTopi::UpdateAllUipInfoAfterRestart()
 	}
 
 	const bool allUipFailed = m_AllUipAttemptedCurrRestart > 0 && (double)m_AllUipSucceededCurrRestart / (double)m_AllUipAttemptedCurrRestart < m_ParamAllUipFailureThr;
-	if (allUipFailed) 
+	if (allUipFailed)
 	{
 		++m_AllUipGap;
 	}
-	else 
+	else
 	{
-		m_AllUipGap = m_AllUipGap == 0 ? 0 : m_AllUipGap - 1;		
+		m_AllUipGap = m_AllUipGap == 0 ? 0 : m_AllUipGap - 1;
 	}
 
 	m_AllUipSucceededCurrRestart = 0;
 	m_AllUipAttemptedCurrRestart = 0;
 }
 
-void CTopi::MinimizeClauseBin(CVector<TULit>& cls)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MinimizeClauseBin(CVector<TULit>& cls)
 {
 	[[maybe_unused]] const auto clsSizeBefore = cls.size();
 
-	assert(NV(2) || P("Minimize-clause-binary start: " + SLits(cls) + "\n"));
+	assert(NV(2) || P("Minimize-clause-binary start: " + SLits(cls.get_const_span()) + "\n"));
 
 	assert(m_RootedVars.empty());
 
@@ -133,7 +149,7 @@ void CTopi::MinimizeClauseBin(CVector<TULit>& cls)
 	});
 
 	TWatchInfo& wi = m_Watches[cls[0]];
-	span<TULit> binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+	TSpanTULit binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
 	bool someMarked = false;
 	for (TULit l : binWatches)
 	{
@@ -150,13 +166,13 @@ void CTopi::MinimizeClauseBin(CVector<TULit>& cls)
 		{
 			return IsRooted(l);
 		}, 1);
-	}	
+	}
 
-	assert(NV(2) || P("Minimize-clause-binary finish; " + (cls.size() == clsSizeBefore ? "couldn't minimize" : "minimized and saved " + to_string(clsSizeBefore - cls.size()) + " literals") + ": " + SLits(cls) + "\n"));
+	assert(NV(2) || P("Minimize-clause-binary finish; " + (cls.size() == clsSizeBefore ? "couldn't minimize" : "minimized and saved " + to_string(clsSizeBefore - cls.size()) + " literals") + ": " + SLits(cls.get_const_span()) + "\n"));
 }
 
-
-bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::GenerateAllUipClause(CVector<TULit>& cls)
 {
 	if (m_ParamAllUipMode == 0 || m_Stat.m_Restarts < m_ParamAllUipFirstRestart)
 	{
@@ -165,14 +181,14 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 
 	assert(m_RootedVars.empty());
 
-	const auto initGlue = GetGlueAndMarkCurrDecLevels(cls);
+	const auto initGlue = GetGlueAndMarkCurrDecLevels(cls.get_const_span());
 	if (cls.size() <= m_AllUipGap + initGlue)
 	{
 		assert(NV(2) || P("GenerateAllUipClause early exit: cls.size() <= m_AllUipGap + initGlue (" + to_string(cls.size()) + " " + to_string(m_AllUipGap) + " " + to_string(initGlue) + ")\n"));
 		return false;
 	}
 
-	assert(NV(2) || P("GenerateAllUipClause attempt #" + to_string(m_Stat.m_AllUipAttempted + 1) + " started with the following clause " + SLits(cls) + "\n"));
+	assert(NV(2) || P("GenerateAllUipClause attempt #" + to_string(m_Stat.m_AllUipAttempted + 1) + " started with the following clause " + SLits(cls.get_const_span()) + "\n"));
 
 	CVector<TULit> res;
 	bool cancelAllUipClauseGeneration = false;
@@ -186,20 +202,20 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 	{
 		++m_Stat.m_AllUipAttempted;
 		++m_AllUipAttemptedCurrRestart;
-		
+
 		if (!cancelAllUipClauseGeneration)
 		{
 			m_Stat.m_LitsRemovedByAllUip += cls.size() - res.size();
 			cls.clear();
-			cls.append(res.get_span());			
+			cls.append(res.get_span());
 			++m_Stat.m_AllUipSucceeded;
 			++m_AllUipSucceededCurrRestart;
-			assert(NV(2) || P("GenerateAllUipClause succeeded, exiting; the new clause is: " + SLits(cls.get_span()) + "\n"));			
-		}		
+			assert(NV(2) || P("GenerateAllUipClause succeeded, exiting; the new clause is: " + SLits(cls.get_const_span()) + "\n"));
+		}
 		else
 		{
-			assert(NV(2) || P("GenerateAllUipClause failed, exiting: " + SLits(cls.get_span()) + "\n"));			
-		}	
+			assert(NV(2) || P("GenerateAllUipClause failed, exiting: " + SLits(cls.get_const_span()) + "\n"));
+		}
 
 		CleanRooted();
 	});
@@ -218,7 +234,7 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 		decLevels.pop();
 
 		assert(UnvisitedNum(decLevel) >= 1);
-		
+
 		assert(NV(2) || P("Decision level " + to_string(decLevel) + " : started with " + to_string(UnvisitedNum(decLevel)) + " unvisited variables\n"));
 
 		for (TUVar v = m_TrailLastVarPerDecLevel[decLevel]; UnvisitedNum(decLevel) > 0; v = m_VarInfo[v].m_TrailPrev)
@@ -243,7 +259,7 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 				auto CancelAllUipClauseGenerationIfRequired = [&]()
 				{
 					if (res.size() + decLevels.size() >= cls.size())
-					{ 
+					{
 						assert(NV(2) || P("Canceled AllUIP clause generation sue to exceeding size\n"));
 						cancelAllUipClauseGeneration = true;
 						return true;
@@ -256,7 +272,7 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 				--m_HugeCounterPerDecLevel[decLevel];
 
 				if (decLevel == m_DecLevel || UnvisitedNum(decLevel) == 0)
-				{					
+				{
 					// It's either the latest decision level, or 
 					// We reached the UIP for a certain level (in which case the for loop will exit)
 					PushVToRes();
@@ -267,8 +283,8 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 					continue;
 				}
 
-				span<TULit> parentSpan = GetAssignedNonDecParentSpanVar(v);
-				assert(NV(2) || P("\tParent " + SLits(parentSpan) + "\n"));
+				const auto parentSpan = GetAssignedNonDecParentSpanVar(v);
+				assert(NV(2) || P("\tParent " + SLits((span<TULit>)parentSpan) + "\n"));
 				for (auto lParent : parentSpan)
 				{
 					if (IsRooted(lParent))
@@ -285,7 +301,7 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 							return false;
 						}
 						break;
-					}						
+					}
 				}
 
 				if (!IsVPushedToRes())
@@ -299,7 +315,7 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 							continue;
 						}
 						MarkRooted(lParent);
-						const TUV lParentDecLevel = GetAssignedDecLevel(lParent);						
+						const TUV lParentDecLevel = GetAssignedDecLevel(lParent);
 						++m_HugeCounterPerDecLevel[lParentDecLevel];
 						if (m_HugeCounterPerDecLevel[lParentDecLevel] > m_HugeCounterDecLevels)
 						{
@@ -314,23 +330,24 @@ bool CTopi::GenerateAllUipClause(CVector<TULit>& cls)
 	return true;
 }
 
-void CTopi::MinimizeClauseMinisat(CVector<TULit>& cls)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MinimizeClauseMinisat(CVector<TULit>& cls)
 {
 	[[maybe_unused]] const auto clsSizeBefore = cls.size();
 
-	assert(NV(2) || P("Minimize-clause-Minisat start: " + SLits(cls) + "\n"));
+	assert(NV(2) || P("Minimize-clause-Minisat start: " + SLits(cls.get_const_span()) + "\n"));
 
 	assert(m_RootedVars.empty());
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
-		CleanRooted();			
+		CleanRooted();
 	});
 
 	if (unlikely(IsUnrecoverable())) return;
 
 	// After this function, all the decision levels in cls have m_DecLevelsLastAppearenceCounter[decLevel] == m_CurrDecLevelsCounter
-	GetGlueAndMarkCurrDecLevels(cls);	
+	GetGlueAndMarkCurrDecLevels(cls.get_const_span());
 
 	// All the variables in clause are the root
 	// The minimization algorithm in a nutshell: for every root literal, if we reach the roots only by parent chain visiting, the literal can be removed
@@ -343,7 +360,7 @@ void CTopi::MinimizeClauseMinisat(CVector<TULit>& cls)
 	}
 
 	CVector<TUVar> toTestForRemoval;
-	
+
 	cls.erase_if_may_reorder([&](TULit l)
 	{
 		if (unlikely(IsUnrecoverable())) return false;
@@ -362,7 +379,7 @@ void CTopi::MinimizeClauseMinisat(CVector<TULit>& cls)
 		}
 		else
 		{
-			auto ProcessParentDecideIfRemovalStillPossible = [&](TUVar currVar, span<TULit> parent)
+			auto ProcessParentDecideIfRemovalStillPossible = [&](TUVar currVar, const span<TULit> parent)
 			{
 				for (TULit parentLit : parent)
 				{
@@ -422,13 +439,14 @@ void CTopi::MinimizeClauseMinisat(CVector<TULit>& cls)
 
 		}
 
-		return canBeRemoved;		
+		return canBeRemoved;
 	});
 
-	assert(NV(2) || P("Minimize-clause-Minisat finish; " + (cls.size() == clsSizeBefore ? "couldn't minimize" : "minimized and saved " + to_string(clsSizeBefore - cls.size()) + " literals") + ": " + SLits(cls) + "\n"));
+	assert(NV(2) || P("Minimize-clause-Minisat finish; " + (cls.size() == clsSizeBefore ? "couldn't minimize" : "minimized and saved " + to_string(clsSizeBefore - cls.size()) + " literals") + ": " + SLits(cls.get_const_span()) + "\n"));
 }
 
-size_t CTopi::SizeWithoutDecLevel0(const span<TULit> cls) const
+template <typename TLit, typename TUInd, bool Compress>
+size_t CTopi<TLit, TUInd, Compress>::SizeWithoutDecLevel0(const span<TULit> cls) const
 {
 	return accumulate(cls.begin(), cls.end(), (size_t)0, [&](size_t sum, TULit l)
 	{
@@ -436,7 +454,8 @@ size_t CTopi::SizeWithoutDecLevel0(const span<TULit> cls) const
 	});
 }
 
-pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed, bool reachDecisionMaxLevel)
+template <typename TLit, typename TUInd, bool Compress>
+pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd, Compress>::LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed, bool reachDecisionMaxLevel)
 {
 	clsBeforeAllUipOrEmptyIfAllUipFailed.clear();
 	++m_Stat.m_Conflicts;
@@ -447,7 +466,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 	{
 		cout << m_Stat.StatStrShort();
 	}
-	
+
 	// Giving an alias to m_VisitedLits to reflect the current usage for readability
 	CVector<TULit>& visitedNegLitsPrevDecLevels = m_HandyLitsClearBefore[0];
 	// Clear from any previous usage
@@ -459,9 +478,9 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 	assert(CiIsLegal(contradictionInfo));
 
-	span<TULit> contradictingCls = CiGetSpan(contradictionInfo);
+	auto contradictingCls = CiGetSpan(contradictionInfo);
 
-	assert(NV(2) || P("************************ Conflict #" + to_string(m_Stat.m_Conflicts) + "\n" + STrail() + "\n" + "Contradicting clause: " + SLits(contradictingCls) + "\n"));
+	assert(NV(2) || P("************************ Conflict #" + to_string(m_Stat.m_Conflicts) + "\n" + STrail() + "\n" + "Contradicting clause: " + SLits((span<TULit>)contradictingCls) + "\n"));
 
 	// The other case is taken care of by the CDCL-loop in Solve
 	assert(GetAssignedDecLevel(contradictingCls[0]) == GetAssignedDecLevel(contradictingCls[1]));
@@ -477,22 +496,22 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 		if (!m_AssignmentInfo[v].m_Visit && decLevel != 0)
 		{
-			MarkVisitedVar(v);			
+			MarkVisitedVar(v);
 
 			if (decLevel == m_DecLevel)
 			{
 				++varsToVisitCurrDecLevel;
-			}			
+			}
 			else
 			{
 				visitedNegLitsPrevDecLevels.push_back(IsSatisfied(l) ? Negate(l) : l);
 			}
 			UpdateScoreVar(v, m_ParamVarActivityUseMapleLevelBreaker ? 0.5 : 1.0);
 		}
-		
+
 	};
-	
-	auto VisitCls = [&](span<TULit> cls, TUInd longClsInd, bool updateClsCounter)
+
+	auto VisitCls = [&](const span<TULit> cls, TUInd longClsInd, bool updateClsCounter)
 	{
 		if (updateClsCounter)
 		{
@@ -501,7 +520,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 			{
 				m_CurrClsCounters.memset(0);
 				m_CurrClsCounter = 1;
-			}			
+			}
 		}
 
 		for (TULit l : cls)
@@ -524,20 +543,20 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 		}
 	};
 
-	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd, false);	
-	
+	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd, false);
+
 	bool contradictingIsLearnt = IsOnTheFlySubsumptionContradictingOn();
 	// Used to maintain all the heuristics working if the contradicting clause manages to stay the 1UIP
 	TUVar trailEndBeforeOnTheFlySubsumption = m_TrailEnd;
 
 	m_VarsParentSubsumed.clear();
-	
+
 	TUVar v = m_TrailEnd;
-	
+
 	for (; varsToVisitCurrDecLevel != 1 || (reachDecisionMaxLevel && m_DecLevel != 0 && !IsAssignedAndDecVar(v)); v = m_VarInfo[v].m_TrailPrev)
 	{
 		auto& ai = m_AssignmentInfo[v];
-		auto& vi = m_VarInfo[v];		
+		auto& vi = m_VarInfo[v];
 
 		if (ai.m_Visit)
 		{
@@ -574,9 +593,9 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 				// If the clause isn't binary, the parent will be complete, which is fine too
 				auto parent = GetAssignedNonDecParentSpanVI(ai, vi);
 				const auto psNo0 = parent.size() == 1 ? 2 : SizeWithoutDecLevel0(parent);
-				assert(NV(2) || P("Visited var: " + SVar(v) + "; Visited clause: " + SLits(parent) + "\n"));
+				assert(NV(2) || P("Visited var: " + SVar(v) + "; Visited clause: " + SLits((span<TULit>)parent) + "\n"));
 				const auto visitedBefore = m_VisitedVars.size();
-				VisitCls(parent, ai.IsAssignedBinary() ? BadClsInd : vi.m_ParentClsInd, 
+				VisitCls(parent, ai.IsAssignedBinary() ? BadClsInd : vi.m_ParentClsInd,
 					IsOnTheFlySubsumptionParentOn() && psNo0 > 2 && (IsParentLongInitial(ai, vi) || psNo0 < m_ParamOnTheFlySubsumptionParentMinGlueToDisable));
 				if (contradictingIsLearnt)
 				{
@@ -588,7 +607,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 					const auto csNo0 = SizeWithoutDecLevel0(contradictingCls);
 
-					if (m_VisitedVars.size() == visitedBefore && 
+					if (m_VisitedVars.size() == visitedBefore &&
 						((!contradictionInfo.m_IsContradictionInBinaryCls && !ClsGetIsLearnt(contradictionInfo.m_ParentClsInd)) ||
 							csNo0 < (size_t)m_ParamOnTheFlySubsumptionContradictingMinGlueToDisable))
 					{
@@ -596,7 +615,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 						// Is the parent clause subsumed by the contradicting clause too?												
 						const bool parentSubsumedByContradicting = psNo0 == csNo0;
 						bool longInitParentSubsumedByLearntContradicting = parentSubsumedByContradicting && psNo0 > 2 &&
-							!ClsGetIsLearnt(vi.m_ParentClsInd) && ClsGetIsLearnt(contradictionInfo.m_ParentClsInd);						
+							!ClsGetIsLearnt(vi.m_ParentClsInd) && ClsGetIsLearnt(contradictionInfo.m_ParentClsInd);
 
 						if (contradictingCls.size() == 2)
 						{
@@ -616,19 +635,19 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 							// A trinary clause, which will now convert into a binary one
 							if (contradictingCls.size() == 3)
 							{
-								ContradictingTrinary2BinaryByResolvingCurrVar();								
+								ContradictingTrinary2BinaryByResolvingCurrVar();
 								longInitParentSubsumedByLearntContradicting = false;
 							}
 							else
 							{
-								assert(contradictingCls.size() > 3);																
+								assert(contradictingCls.size() > 3);
 								DeleteLitFromCls(contradictionInfo.m_ParentClsInd, Negate(GetAssignedLitForVar(v)));
-							}							
-							contradictingCls = CiGetSpan(contradictionInfo);							
+							}
+							contradictingCls = CiGetSpan(contradictionInfo);
 						}
 						m_Stat.m_LitsRemovedByConfSubsumption++;
-						
-						assert(NV(2) || P("Contradicting clause after reduction: " + SLits(contradictingCls) + "\n"));
+
+						assert(NV(2) || P("Contradicting clause after reduction: " + SLits((span<TULit>)contradictingCls) + "\n"));
 
 						if (parentSubsumedByContradicting)
 						{
@@ -653,7 +672,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 									else
 									{
 										DeleteLitFromCls(vi.m_ParentClsInd, GetAssignedLitForVar(v));
-										swap(vi.m_ParentClsInd, contradictionInfo.m_ParentClsInd);										
+										swap(vi.m_ParentClsInd, contradictionInfo.m_ParentClsInd);
 									}
 									contradictingCls = CiGetSpan(contradictionInfo);
 								}
@@ -671,7 +690,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 						{
 							UnassignVar(m_TrailEnd);
 						}
-						if (m_ParamCustomBtStrat > 0)
+						if (m_CurrCustomBtStrat > 0)
 						{
 							m_BestScorePerDecLevel[GetAssignedDecLevelVar(m_TrailEnd)] = CalcMaxDecLevelScore(GetAssignedDecLevelVar(m_TrailEnd));
 						}
@@ -688,7 +707,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 					{
 						continue;
 					}
-					
+
 					const auto visitedNegLitsPrevDecLevelsSpan = visitedNegLitsPrevDecLevels.get_const_span();
 					for (TULit l : visitedNegLitsPrevDecLevelsSpan)
 					{
@@ -731,7 +750,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 						assert(NV(2) || P("On-the-fly subsumption will remove the pivot " + SVar(v) + " from this parent\n"));
 					}
 				}
-			}			
+			}
 		}
 	}
 
@@ -772,7 +791,7 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 	visitedNegLitsPrevDecLevels.push_back(firstUIPNegated);
 	swap(visitedNegLitsPrevDecLevels[0], visitedNegLitsPrevDecLevels.back());
 
-	if (visitedNegLitsPrevDecLevels.size() <= m_ParamMinimizeClausesBinMaxSize && GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevDecLevels) <= m_ParamMinimizeClausesBinMaxLbd)
+	if (visitedNegLitsPrevDecLevels.size() <= m_ParamMinimizeClausesBinMaxSize && GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevDecLevels.get_const_span()) <= m_ParamMinimizeClausesBinMaxLbd)
 	{
 		MinimizeClauseBin(visitedNegLitsPrevDecLevels);
 	}
@@ -781,17 +800,17 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 	if (visitedNegLitsPrevDecLevels.size() > 2)
 	{
-		auto highestDecLevelLitIt = GetAssignedLitsHighestDecLevelIt(visitedNegLitsPrevDecLevels, 1);
-		
+		auto highestDecLevelLitIt = GetAssignedLitsHighestDecLevelIt(visitedNegLitsPrevDecLevels.get_span(), 1);
+
 		if (*highestDecLevelLitIt != visitedNegLitsPrevDecLevels[1])
 		{
 			swap(*highestDecLevelLitIt, visitedNegLitsPrevDecLevels[1]);
 		}
 	}
 
-	assert(NV(1) || P("New-clause at level " + to_string(m_DecLevel) + " : " + SLits(visitedNegLitsPrevDecLevels.get_span()) + "\n"));
-	
-	bool addInitCls = false;	
+	assert(NV(1) || P("New-clause at level " + to_string(m_DecLevel) + " : " + SLits(visitedNegLitsPrevDecLevels.get_const_span()) + "\n"));
+
+	bool addInitCls = false;
 	TUInd clsStart = BadClsInd;
 
 	if (contradictingIsLearnt)
@@ -801,10 +820,13 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 		// Disabling flipped clause recording
 		m_FlippedLit = BadULit;
-		// Is clause initial
-		addInitCls = !ClsGetIsLearnt(contradictionInfo.m_ParentClsInd);
+		if (!contradictionInfo.m_IsContradictionInBinaryCls)
+		{
+			// Is clause initial
+			addInitCls = !ClsGetIsLearnt(contradictionInfo.m_ParentClsInd);
+		}
 		if (contradictingCls.size() > visitedNegLitsPrevDecLevels.size())
-		{			
+		{
 			assert(NV(2) || P("The contradicting clause was reduced further by minimization and/or binary-resolution\n"));
 			if (contradictionInfo.m_IsContradictionInBinaryCls)
 			{
@@ -815,11 +837,11 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 			{
 				m_Stat.m_LitsRemovedByConfSubsumption += ClsGetSize(contradictionInfo.m_ParentClsInd);
 				DeleteCls(contradictionInfo.m_ParentClsInd);
-			}			
-			
-			contradictingIsLearnt = false;			
+			}
+
+			contradictingIsLearnt = false;
 		}
-		else 
+		else
 		{
 			assert(NV(2) || P("The contradicting clause will serve as the asserting clause, no need to record a new one!\n"));
 			if (!contradictionInfo.m_IsContradictionInBinaryCls)
@@ -832,10 +854,10 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 	if (!contradictingIsLearnt)
 	{
 		clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevDecLevels, !addInitCls);
-	}	
+	}
 
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
-	
+
 	if (m_ParamVarActivityUseMapleLevelBreaker)
 	{
 		const TUV secondHighestDecLevel = visitedNegLitsPrevDecLevels.size() <= 1 ? 0 : min(GetAssignedDecLevel(visitedNegLitsPrevDecLevels[0]), GetAssignedDecLevel(visitedNegLitsPrevDecLevels[1]));
@@ -860,13 +882,14 @@ pair<span<TULit>, TUInd> CTopi::LearnAndUpdateHeuristics(TContradictionInfo& con
 
 	if (updateGlue)
 	{
-		ClsDelNewLearntOrGlueUpdate(clsStart, glue);			
+		ClsDelNewLearntOrGlueUpdate(clsStart, glue);
 	}
 
 	return make_pair(visitedNegLitsPrevDecLevels.get_span(), clsStart);
 }
 
-pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionInfo, span<TULit> mainClsBeforeAllUip)
+template <typename TLit, typename TUInd, bool Compress>
+pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd, Compress>::RecordFlipped(TContradictionInfo& contradictionInfo, typename CTopi<TLit, TUInd, Compress>::TSpanTULit mainClsBeforeAllUip)
 {
 	// Giving an alias to m_VisitedLits to reflect the current usage for readability
 	CVector<TULit>& visitedNegLitsPrevFlippedLevels = m_HandyLitsClearBefore[1];
@@ -883,21 +906,21 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 	for (TUVar v = m_TrailEnd; v != flippedVar; v = m_VarInfo[v].m_TrailPrev)
 	{
 		assert(v != BadUVar);
-		MarkRootedVar(v);		
+		MarkRootedVar(v);
 	}
-	MarkRootedVar(flippedVar);	
-	
+	MarkRootedVar(flippedVar);
+
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
 		CleanVisited();
-		CleanRooted();		
+		CleanRooted();
 	});
 
 	assert(NV(2) || contradictionInfo.m_IsContradictionInBinaryCls || P("Contradicting cls: " + SLits(Cls(contradictionInfo.m_ParentClsInd)) + "\n"));
 
 	assert(CiIsLegal(contradictionInfo));
 
-	span<TULit> contradictingCls = CiGetSpan(contradictionInfo);
+	auto contradictingCls = CiGetSpan(contradictionInfo);
 
 	assert(NV(2) || P("Will try to record a flipped clause\n"));
 
@@ -907,7 +930,7 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 	assert(GetAssignedDecLevel(contradictingCls[0]) == m_DecLevel);
 
 	TUV varsToVisitCurrFlippedLevel = 0;
-	
+
 	auto VisitLit = [&](TULit l)
 	{
 		TUVar v = GetVar(l);
@@ -924,18 +947,18 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 			else
 			{
 				visitedNegLitsPrevFlippedLevels.push_back(IsSatisfied(l) ? Negate(l) : l);
-			}			
+			}
 		}
 
 	};
 
-	auto VisitCls = [&](span<TULit> cls, TUInd longClsInd)
+	auto VisitCls = [&](const span<TULit> cls, TUInd longClsInd)
 	{
-		for (TULit l : cls) VisitLit(l);		
+		for (TULit l : cls) VisitLit(l);
 	};
 
 	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd);
-	
+
 	if (varsToVisitCurrFlippedLevel == 1)
 	{
 		assert(NV(2) || P("Flipped is skipped, since the contradicting clause has only one literal beyond the flipped (which might have happened because of on-the-fly-subsumption)\n"));
@@ -959,7 +982,7 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 				// If the clause is binary, the parent will contain only the other literal (without l), but we don't need l anyway
 				// If the clause isn't binary, the parent will be complete, which is fine too
 				auto parent = GetAssignedNonDecParentSpanVI(ai, vi);
-				assert(NV(2) || P("Visited var: " + SVar(v) + "; Visited clause: " + SLits(parent) + "\n"));
+				assert(NV(2) || P("Visited var: " + SVar(v) + "; Visited clause: " + SLits((span<TULit>)parent) + "\n"));
 				VisitCls(parent, ai.IsAssignedBinary() ? BadClsInd : vi.m_ParentClsInd);
 			}
 		}
@@ -985,7 +1008,7 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 
 		if (isSubsumedByMain)
 		{
-			assert(NV(2) || P("Flipped is subsumed by the main clause: skipping; the clause so far: " + SLit(Negate(GetAssignedLitForVar(v))) + " " + SLits(visitedNegLitsPrevFlippedLevels) + "\n"));
+			assert(NV(2) || P("Flipped is subsumed by the main clause: skipping; the clause so far: " + SLit(Negate(GetAssignedLitForVar(v))) + " " + SLits(visitedNegLitsPrevFlippedLevels.get_const_span()) + "\n"));
 			visitedNegLitsPrevFlippedLevels.clear();
 			return make_pair(visitedNegLitsPrevFlippedLevels.get_span(), BadClsInd);
 		}
@@ -995,7 +1018,7 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 	CleanRooted();
 
 	if (m_ParamMinimizeClausesMinisat && visitedNegLitsPrevFlippedLevels.size() > 1)
-	{		
+	{
 		MinimizeClauseMinisat(visitedNegLitsPrevFlippedLevels);
 		if (unlikely(IsUnrecoverable()))
 		{
@@ -1020,14 +1043,14 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 	visitedNegLitsPrevFlippedLevels.push_back(firstUIPNegated);
 	swap(visitedNegLitsPrevFlippedLevels[0], visitedNegLitsPrevFlippedLevels.back());
 
-	if (visitedNegLitsPrevFlippedLevels.size() <= m_ParamMinimizeClausesBinMaxSize && GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevFlippedLevels) <= m_ParamMinimizeClausesBinMaxLbd)
+	if (visitedNegLitsPrevFlippedLevels.size() <= m_ParamMinimizeClausesBinMaxSize && GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevFlippedLevels.get_const_span()) <= m_ParamMinimizeClausesBinMaxLbd)
 	{
 		MinimizeClauseBin(visitedNegLitsPrevFlippedLevels);
 	}
 
 	if (unlikely(IsUnrecoverable())) return make_pair(visitedNegLitsPrevFlippedLevels.get_span(), BadClsInd);
 
-	const auto glue = GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevFlippedLevels);
+	const auto glue = GetGlueAndMarkCurrDecLevels(visitedNegLitsPrevFlippedLevels.get_const_span());
 	if (glue > m_ParamFlippedRecordingMaxLbdToRecord)
 	{
 		assert(NV(2) || P("Flipped glue " + to_string(glue) + " is higher than the threshold " + to_string(m_ParamFlippedRecordingMaxLbdToRecord) + ", so flipped recording will be skipped\n"));
@@ -1037,7 +1060,7 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 
 	if (visitedNegLitsPrevFlippedLevels.size() > 2)
 	{
-		auto highestDecLevelLitIt = GetAssignedLitsHighestDecLevelIt(visitedNegLitsPrevFlippedLevels, 1);
+		auto highestDecLevelLitIt = GetAssignedLitsHighestDecLevelIt(visitedNegLitsPrevFlippedLevels.get_span(), 1);
 
 		if (*highestDecLevelLitIt != visitedNegLitsPrevFlippedLevels[1])
 		{
@@ -1045,22 +1068,23 @@ pair<span<TULit>, TUInd> CTopi::RecordFlipped(TContradictionInfo& contradictionI
 		}
 	}
 
-	assert(NV(1) || P("New flipped clause at level " + to_string(m_DecLevel) + " : " + SLits(visitedNegLitsPrevFlippedLevels.get_span()) + "\n"));
+	assert(NV(1) || P("New flipped clause at level " + to_string(m_DecLevel) + " : " + SLits(visitedNegLitsPrevFlippedLevels.get_const_span()) + "\n"));
 
 	auto clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevFlippedLevels, true);
 
-	assert(NV(2) || P("Flipped clause recorded: " + SLits(visitedNegLitsPrevFlippedLevels) + "\n"));
+	assert(NV(2) || P("Flipped clause recorded: " + SLits(visitedNegLitsPrevFlippedLevels.get_const_span()) + "\n"));
 	++m_Stat.m_FlippedClauses;
 
 	if (visitedNegLitsPrevFlippedLevels.size() > 2)
 	{
-		ClsDelNewLearntOrGlueUpdate(clsStart, glue);				
+		ClsDelNewLearntOrGlueUpdate(clsStart, glue);
 	}
-	
+
 	return make_pair(visitedNegLitsPrevFlippedLevels.get_span(), clsStart);
 }
 
-void CTopi::NewLearntClsApplyCbLearntDrat(span<TULit> learntCls)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULit> learntCls)
 {
 	assert(IsCbLearntOrDrat());
 
@@ -1074,7 +1098,7 @@ void CTopi::NewLearntClsApplyCbLearntDrat(span<TULit> learntCls)
 	});
 
 	if (m_OpenedDratFile != nullptr)
-	{		
+	{
 		ofstream& o = *m_OpenedDratFile;
 
 		if (!o.good())
@@ -1111,11 +1135,11 @@ void CTopi::NewLearntClsApplyCbLearntDrat(span<TULit> learntCls)
 			}
 			o << "0" << endl;
 		}
-		
+
 	}
 
 	if (M_CbNewLearntCls != nullptr)
-	{		
+	{
 		TStopTopor stopTopor = M_CbNewLearntCls(userClsSpan);
 		if (stopTopor == TStopTopor::VAL_STOP)
 		{
@@ -1124,22 +1148,24 @@ void CTopi::NewLearntClsApplyCbLearntDrat(span<TULit> learntCls)
 	}
 }
 
-bool CTopi::CiIsLegal(TContradictionInfo& ci, bool assertTwoLitsSameDecLevel)
+template <typename TLit, typename TUInd, bool Compress>
+bool CTopi<TLit, TUInd, Compress>::CiIsLegal(TContradictionInfo& ci, bool assertTwoLitsSameDecLevel)
 {
 	assert(ci.IsContradiction());
-	auto cls = CiGetSpan(ci);
+	const auto cls = CiGetSpan(ci);
 	// The contradicting clause's size is at least 2
 	assert(cls.size() >= 2);
 	// All the literals in the contradicting clause must be assigned false
 	assert(all_of(cls.begin(), cls.end(), [&](TULit l) { return IsFalsified(l); }));
 	// The first two literals must have the same highest decision level(BCP ensures this invariant)
 	assert(!assertTwoLitsSameDecLevel || GetAssignedDecLevel(cls[0]) == GetAssignedDecLevel(cls[1]));
-	assert(cls.size() == 2 || GetAssignedDecLevel(cls[0]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2)));
-	assert(cls.size() == 2 || GetAssignedDecLevel(cls[1]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2)));
+	assert(cls.size() == 2 || GetAssignedDecLevel(cls[0]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt((span<TULit>)cls, 2)));
+	assert(cls.size() == 2 || GetAssignedDecLevel(cls[1]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt((span<TULit>)cls, 2)));
 	return true;
 }
 
-pair<uint64_t, priority_queue<TUV>> CTopi::GetDecLevelsAndMarkInHugeCounter(span<TULit> cls)
+template <typename TLit, typename TUInd, bool Compress>
+pair<uint64_t, priority_queue<typename CTopi<TLit, TUInd, Compress>::TUV>> CTopi<TLit, TUInd, Compress>::GetDecLevelsAndMarkInHugeCounter(TSpanTULit cls)
 {
 	priority_queue<TUV> decLevels;
 
@@ -1177,42 +1203,15 @@ pair<uint64_t, priority_queue<TUV>> CTopi::GetDecLevelsAndMarkInHugeCounter(span
 	return make_pair(initMarkedDecLevelsCounter, decLevels);
 }
 
-TUV CTopi::GetGlueAndMarkCurrDecLevels(span<TULit> cls)
-{
-	++m_MarkedDecLevelsCounter;
-	if (unlikely(m_MarkedDecLevelsCounter < 0))
-	{
-		m_DecLevelsLastAppearenceCounter.memset(0);
-		m_MarkedDecLevelsCounter = 1;
-	}
-
-	TUV decLevels = 0;
-	for (TULit l : cls)
-	{
-		if (m_ParamAssumpsIgnoreInGlue && IsAssump(l))
-		{
-			continue;
-		}
-		assert(IsAssigned(l));
-		const TUV decLevel = GetAssignedDecLevel(l);
-		if (m_DecLevelsLastAppearenceCounter[decLevel] != m_MarkedDecLevelsCounter)
-		{
-			++decLevels;
-			m_DecLevelsLastAppearenceCounter[decLevel] = m_MarkedDecLevelsCounter;
-		}
-	}
-
-	return decLevels;
-}
-
-void CTopi::RemoveLitsFromSubsumed()
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::RemoveLitsFromSubsumed()
 {
 	assert(IsOnTheFlySubsumptionParentOn());
 	for (auto v : m_VarsParentSubsumed.get_span())
 	{
 		if (!m_AssignmentInfo[v].IsAssignedBinary())
 		{
-			span<TULit> parentCls = Cls(m_VarInfo[v].m_ParentClsInd);
+			auto parentCls = Cls(m_VarInfo[v].m_ParentClsInd);
 			if (parentCls.size() == 3)
 			{
 				assert(NV(2) || P("On-the-fly subsumption converted the long parent to a binary; pivot = " + SVar(v) + "\n"));
@@ -1233,14 +1232,15 @@ void CTopi::RemoveLitsFromSubsumed()
 	m_VarsParentSubsumed.clear();
 }
 
-void CTopi::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail, bool assumpMode)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail, bool assumpMode)
 {
 	while (m_Status == TToporStatus::STATUS_UNDECIDED && contradictionInfo.IsContradiction())
 	{
-		//assert(m_ParamVerbosityLevel <= 2 || P("************************ DEBUGGING (contradiction--first-line-in-while)\n" + STrail() + "\n"));
+		//assert(NV(2) || P("************************ DEBUGGING (contradiction--first-line-in-while)\n" + STrail() + "\n"));
 		// See the contradicting clause invariants asserted in GetContradictingClauseSpan
 		assert(CiIsLegal(contradictionInfo));
-		const span<TULit> contradictingCls = CiGetSpan(contradictionInfo);
+		const auto contradictingCls = CiGetSpan(contradictionInfo, 2);
 		// BCP guarantees that the two first literals (comprising the watched literals) 
 		// have the highest decision level in the contradicting clause			
 		auto maxDecLevelInContradictingCls = max(GetAssignedDecLevel(contradictingCls[0]), GetAssignedDecLevel(contradictingCls[1]));
@@ -1264,8 +1264,8 @@ void CTopi::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reu
 		auto [additionalCls, additionalAssertingClsInd] = RecordFlipped(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed.empty() ? cls : clsBeforeAllUipOrEmptyIfAllUipFailed);
 		if (unlikely(IsUnrecoverable())) return;
 
-		if (!additionalCls.empty() && 
-			((cls.size() > 1 && additionalCls.size() == 1) || 
+		if (!additionalCls.empty() &&
+			((cls.size() > 1 && additionalCls.size() == 1) ||
 				(cls.size() != 1 && additionalCls.size() != 1 &&
 					GetAssignedDecLevel(additionalCls[0]) != GetAssignedDecLevel(additionalCls[1]) &&
 					GetAssignedDecLevel(additionalCls[1]) < GetAssignedDecLevel(cls[1]))))
@@ -1293,25 +1293,25 @@ void CTopi::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reu
 			// We don't want to backtrack lower than the assumptions to prevent assumption re-propagation
 			ncbBtLevel = m_DecLevelOfLastAssignedAssumption;
 		}
-		
+
 		if (cls.size() > 2)
 		{
 			++m_RstGlueAssertingGluedClss;
 			if (m_CurrRestartStrat == RESTART_STRAT_LBD)
 			{
 				// Might be initial because of on-the-fly subsumption
-				RstNewAssertingGluedCls(ClsGetIsLearnt(assertingClsInd) ? ClsGetGlue(assertingClsInd) : GetGlueAndMarkCurrDecLevels(Cls(assertingClsInd)));
+				RstNewAssertingGluedCls(ClsGetIsLearnt(assertingClsInd) ? ClsGetGlue(assertingClsInd) : GetGlueAndMarkCurrDecLevels(ConstClsSpan(assertingClsInd)));
 			}
 		}
-		
+
 		if (IsOnTheFlySubsumptionParentOn() && !m_VarsParentSubsumed.empty())
 		{
 			RemoveLitsFromSubsumed();
-		}		
-		
+		}
+
 		// Determine how to backtrack 		
 		const bool isChronoBt = assumpMode || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
-		const auto btLevel = isChronoBt ? (assumpMode || m_ParamCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
+		const auto btLevel = isChronoBt ? (assumpMode || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
 		Backtrack(btLevel, false, reuseTrail);
 		Assign(m_FlippedLit = cls[0], cls.size() >= 2 ? assertingClsInd : BadClsInd, cls.size() == 1 ? BadULit : cls[1], cls.size() == 1 ? 0 : GetAssignedDecLevel(cls[1]));
 		assert(NV(2) || P("***** Flipped former UIP to " + SLit(cls[0]) + "\n"));
@@ -1327,7 +1327,8 @@ void CTopi::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reu
 	}
 }
 
-void CTopi::MarkDecisionsInConeAsVisited(TULit triggeringLit)
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::MarkDecisionsInConeAsVisited(TULit triggeringLit)
 {
 	assert(IsAssigned(triggeringLit));
 
@@ -1342,7 +1343,7 @@ void CTopi::MarkDecisionsInConeAsVisited(TULit triggeringLit)
 	{
 		if (IsVisitedVar(v) && !IsAssignedDecVar(v))
 		{
-			span<TULit> cls = GetAssignedNonDecParentSpanVar(v);
+			const auto cls = GetAssignedNonDecParentSpanVar(v);
 			for (auto clsLit : cls)
 			{
 				MarkVisited(clsLit);
@@ -1350,7 +1351,7 @@ void CTopi::MarkDecisionsInConeAsVisited(TULit triggeringLit)
 			if (v != GetVar(triggeringLit))
 			{
 				m_AssignmentInfo[v].m_Visit = false;
-			}			
+			}
 		}
 	}
 
@@ -1361,3 +1362,7 @@ void CTopi::MarkDecisionsInConeAsVisited(TULit triggeringLit)
 
 	assert(IsVisitedConsistent());
 }
+
+template class CTopi<int32_t, uint32_t, false>;
+template class CTopi<int32_t, uint64_t, false>;
+template class CTopi<int32_t, uint64_t, true>;

@@ -17,30 +17,44 @@
 
 namespace Topor
 {
-	// The two main types in the solver are:
-	// (1) The signed literal type TLit (used to provide literals by the user; Internally, the solver uses the corresponding unsigned type of the same width)
-	// (2) The unsigned index into the clause and watch buffers TUInd 
-	// Both are, currently, 32-bit integers, but the solver is designed to be able to work with any types as long as sizeof(TUInd) >= sizeof(TLit) and sizeof(TUInd) <= sizeof(size_t)
-
-	// A literal is currently a 32-bit signed integer. 	
-	using TLit = int32_t;
-	// It must be a signed integer
-	static_assert(std::is_signed<TLit>::value);
-	// It must be a power of 2
-	static_assert(std::has_single_bit(sizeof(TLit)));
-
-	// An index into the clause and watch buffers is currently a 32-bit signed integer. 	
-	using TUInd = uint32_t;
-	// It must be an unsigned integer
-	static_assert(std::is_unsigned<TUInd>::value);
-	// It must be a power of 2
-	static_assert(std::has_single_bit(sizeof(TUInd)));
-	// It must be at least as wide as a literal (since the clause and watch buffers will store literals, amongst others)
-	static_assert(sizeof(TUInd) >= sizeof(TLit));
-	// It must not be wider than size_t
-	static_assert(sizeof(TUInd) <= sizeof(size_t));
-	// The number of literal-entries in an index-entry
-	static constexpr size_t LitsInInd = sizeof(TUInd) / sizeof(TLit);
+	// The solver status
+	enum class TToporStatus : uint8_t
+	{
+		// Status unknown
+		STATUS_UNDECIDED,
+		// The latest invocation had returned SAT and no clauses contradicting the model were introduced since
+		STATUS_SAT,
+		// The latest invocation returned UNSAT, but this status might be temporary (under assumptions)
+		STATUS_UNSAT,
+		// The latest invocation returned USER_INTERRUPT
+		STATUS_USER_INTERRUPT,
+		/*
+		* Only unrecoverable status values below
+		*/
+		STATUS_FIRST_UNRECOVERABLE,
+		// The instance is forever contradictory. 
+		STATUS_CONTRADICTORY = STATUS_FIRST_UNRECOVERABLE,
+		/*
+		* Only permanently erroneous values below
+		*/
+		STATUS_FIRST_PERMANENT_ERROR,
+		// The instance is in memory-out state, meaning that one of the allocations fails.
+		STATUS_ALLOC_FAILED = STATUS_FIRST_PERMANENT_ERROR,
+		// Data doesn't fit into the buffer
+		STATUS_INDEX_TOO_NARROW,
+		// Parameter-related error
+		STATUS_PARAM_ERROR,
+		// Error while processing assumption-required queries
+		STATUS_ASSUMPTION_REQUIRED_ERROR,
+		// Global timeout reached
+		STATUS_GLOBAL_TIMEOUT,
+		// Problem when trying to access/write the DRAT file
+		STATUS_DRAT_FILE_PROBLEM,
+		// An explicit-clauses-only function invoked in compressed mode
+		STATUS_COMPRESSED_MISMATCH,
+		// So-far: cannot accommodate the last possible variable if sizeof(TLit) == sizeof(size_t), since the allocation will fail
+		STATUS_EXOTIC_ERROR
+	};
 
 	// Return value of Topor solving functions
 	enum class TToporReturnVal : uint8_t
@@ -68,8 +82,7 @@ namespace Topor
 		// Problem with DRAT file generation
 		RET_DRAT_FILE_PROBLEM,
 		// Exotic error: see the error string for more information
-		RET_EXOTIC_ERROR
-	
+		RET_EXOTIC_ERROR	
 	};
 
 	[[maybe_unused]] std::ostream& operator << (std::ostream& os, const TToporReturnVal& trv);
@@ -92,13 +105,17 @@ namespace Topor
 		VAL_CONTINUE
 	};
 	// New learnt clause report callback. 
+	template <typename TLit>
 	using TCbNewLearntCls = std::function<TStopTopor(const std::span<TLit>)>;
 	using TCbStopNow = std::function<TStopTopor()>;
+	using TGetNum = std::function<size_t()>;
+	using TGetString = std::function<std::string()>;
 
 	// Statistics, available to the user
+	template <typename TLit, typename TUInd>
 	struct TToporStatistics
 	{
-		TToporStatistics(const size_t& bCap, const TUInd& bSz, double varActivityInc) : m_BCapacity(bCap), m_BSize(bSz), m_VarActivityInc(varActivityInc), m_OverallTime(false, 1000), m_TimeSinceLastSolveStart(false, 1000) {}
+		TToporStatistics(TGetNum BGetNum, TGetNum BGetCap, TGetNum BGetSize, TGetString GetExtraString, double varActivityInc) : M_BGetNum(BGetNum), M_BGetCap(BGetCap), M_BGetSize(BGetSize), M_GetExtraString(GetExtraString), m_VarActivityInc(varActivityInc), m_OverallTime(false, 1000), m_TimeSinceLastSolveStart(false, 1000) {}
 		
 		template <bool IsColor = true> 
 		std::string StatStrShort(bool forcePrintingHead = false)
@@ -131,11 +148,12 @@ namespace Topor
 			//ssStat << print_as_color<IsColor ? ansi_color_code::bright_magenta: ansi_color_code::none>(to_string(m_DelayedImplicationsPropagated)) << " ";
 			//ssStat << print_as_color<IsColor ? ansi_color_code::bright_magenta: ansi_color_code::none>(to_string(m_DelayedImplicationDecLevelsCollapsed)) << " ";
 
-			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::red: ansi_color_code::none>(" BufSzMb BufCapMb");
-			ssStat << print_as_color<IsColor ? ansi_color_code::red: ansi_color_code::none>(to_string(BSizeMb())) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::red: ansi_color_code::none>(to_string(BCapacityMb())) << " ";
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::red: ansi_color_code::none>(" Bufs BufSzMb BufCapMb");
+			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string(M_BGetNum())) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string((double)M_BGetSize() / 1000000.)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::red: ansi_color_code::none>(to_string((double)M_BGetCap() / 1000000.)) << " ";
 
-			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::blue: ansi_color_code::none>(" SolveInvs ShortIncrInvs UserVars IntrVars AddClss ActClss BinAClss LongAClss AvrgAClsLen AvrgALongClsLen LongALrnts MedQL HighQL Simplfs ClssDels FlpRecs FlpSw FlpUnit SubsLRem AllUipAtmp AllUipSucc AllUipLRem");
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::blue: ansi_color_code::none>(" SolveInvs ShortIncrInvs UserVars IntrVars AddClss ActClss BinAClss LongAClss AvrgAClsLen AvrgALongClsLen LongALrnts Simplfs ClssDels FlpRecs FlpSw FlpUnit SubsLRem AllUipAtmp AllUipSucc AllUipLRem");
 			ssStat << print_as_color<IsColor ? ansi_color_code::blue: ansi_color_code::none>(to_string(m_SolveInvs)) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::blue: ansi_color_code::none>(to_string(m_ShortIncSolveInvs)) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::blue: ansi_color_code::none>(to_string(m_MaxUserVar)) << " ";
@@ -183,7 +201,9 @@ namespace Topor
 
 			++m_ShortStartInv;
 
-			return (printHead ? ssHead.str() + "\n" : "") + ssStat.str() + "\n";
+			std::string extraStr = M_GetExtraString == nullptr ? "" : M_GetExtraString();
+
+			return (printHead ? ssHead.str() + "\n" : "") + ssStat.str() + (extraStr == "" ? "\n" : "\n" + extraStr + "\n");
 		}
 
 		// The maximal variable number, provided by the user
@@ -226,13 +246,13 @@ namespace Topor
 		// Contradictions discovered during reuse-trail
 		uint64_t m_ReuseTrailContradictions = 0;
 
-		// The capacity of the main buffer, containing the clauses and the watches, in bytes
-		const size_t& m_BCapacity;
-		inline double BCapacityMb() const { return (double)m_BCapacity / 1000000.; }
-		// The size of the main buffer in bytes (which can be at most as large as the capacity m_BCapacity)
-		const TUInd& m_BSize;
-		inline double BSizeMb() const { return (double)m_BSize / 1000000.; }
-
+		// The number, capacity and sizes of the main buffer(s), containing the clauses, in bytes
+		TGetNum M_BGetNum = nullptr;
+		TGetNum M_BGetCap = nullptr;
+		TGetNum M_BGetSize = nullptr;
+		// An extra-string
+		TGetString M_GetExtraString = nullptr;
+		
 		// The number of conflicts
 		uint64_t m_Conflicts = 0;
 
@@ -341,8 +361,7 @@ namespace Topor
 		CTimeMeasure m_TimeSinceLastSolveStart;
 		uint8_t m_ShortStartInv = 0;
 		uint64_t m_ActiveOverallClsLen = 0;		
-		friend class CTopi;
-
+		
 		template <class T>
 		std::string to_string(T v, size_t precision = 1) 
 		{
@@ -366,6 +385,9 @@ namespace Topor
 			stm << std::scientific << std::setprecision(1) << v;
 			return stm.str();
 		}
+
+		template <typename T1, typename T2, bool T3>
+		friend class CTopi; // every CTopi is our friend
 	};
 }
 

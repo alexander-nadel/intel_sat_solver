@@ -4,16 +4,20 @@
 #pragma once
 
 #include "ToporVector.hpp"
-#include "TopiGlobal.hpp"
 
 // Variable scores handler, including a heap implementation
 
 namespace Topor
 {
-	class CVarScores {	
+	template <typename TUVar, typename TUV>
+	class CVarScores 
+	{	
 	public:
 		// The heap's 0 index must always be occupied, so that position 0 would mean not-in-the-heap
-		CVarScores(double& varActivityInc) : m_VarActivityInc(varActivityInc), m_Heap(1, 0, 1) {}
+		CVarScores(double& varActivityInc) : m_VarActivityInc(varActivityInc), m_Heap(1, 0, 1) 
+		{
+			static_assert(std::is_same<TUVar, TUV>::value);
+		}
 
 		void SetInitOrder(bool initOrder)
 		{
@@ -142,6 +146,8 @@ namespace Topor
 		inline void set_multiplier(double multiplier) { m_PosScore.SetMultiplier(multiplier); m_Heap.SetMultiplier(multiplier); }
 
 		inline void replace_pos_score_vars(TUVar vFrom, TUVar vTo) { m_PosScore[vTo] = move(m_PosScore[vFrom]); }
+
+		inline size_t memMb() const { return m_Activity.memMb() + m_Heap.memMb() + m_PosScore.memMb(); }
 	protected:
 		// The activity
 		CVector<double> m_Activity;     
@@ -204,7 +210,6 @@ namespace Topor
 			m_Heap[i] = v;
 			m_PosScore[v].m_Pos = i;
 		}
-
 
 		void percolate_down(TUV i)
 		{

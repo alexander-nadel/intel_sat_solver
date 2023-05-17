@@ -4,13 +4,13 @@
 #pragma once
 
 #include "ToporDynArray.hpp"
-#include "TopiGlobal.hpp"
 
 namespace Topor
 {
 
 	// Stores a window of the last N values, including a possibility to get an average
 	// Used for Glucose-inspired restart strategies
+	template <typename TUV>
 	class TWinAverage
 	{
 	public:

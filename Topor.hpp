@@ -14,8 +14,16 @@
 
 namespace Topor
 {
+	template <typename TLit, typename TUInd, bool Compress>
 	class CTopi;
 
+	// The template types are:
+	// (1) The signed literal type TLit (used to provide literals by the user; Internally, the solver uses the corresponding unsigned type of the same width)
+	// (2) The unsigned index into the clause and watch buffers TUInd 
+	// The solver is designed to be able to work with any above types as long as sizeof(TUInd) >= sizeof(TLit) and sizeof(TUInd) <= sizeof(size_t)
+	// (3) A Boolean specifying whether to compress the clause buffer
+	
+	template <typename TLit = int32_t, typename TUInd = uint32_t, bool Compress = false>
 	class CTopor
 	{
 	public:
@@ -50,7 +58,9 @@ namespace Topor
 		// onlyOnce = true: change only once right now
 		void FixPolarity(TLit l, bool onlyOnce = false);
 		// Clear any polarity information of the variable v, provided by the user (so, the default solver's heuristic will be used to determine polarity)
-		void ClearUserPolarityInfo(TLit v);
+		void ClearUserPolarityInfo(TLit v); 
+		// Create an internal literal for l: for advanced usages to play with internal literal ordering
+		void CreateInternalLit(TLit l);
 		
 		// Dump DRAT
 		void DumpDrat(std::ofstream& openedDratFile, bool isDratBinary);
@@ -62,7 +72,7 @@ namespace Topor
 		// Set callback: stop now
 		void SetCbStopNow(TCbStopNow CbStopNow);
 		// Set callback: new learnt clause
-		void SetCbNewLearntCls(TCbNewLearntCls CbNewLearntCls);
+		void SetCbNewLearntCls(TCbNewLearntCls<TLit> CbNewLearntCls);
 
 		// Get the value of a literal
 		TToporLitVal GetLitValue(TLit l) const;
@@ -79,10 +89,10 @@ namespace Topor
 		// If IsError() holds, a non-empty explanation is mandatory, otherwise it might be empty (or not)
 		std::string GetStatusExplanation() const;
 		// Get statistics
-		TToporStatistics GetStatistics() const;
+		TToporStatistics<TLit, TUInd> GetStatistics() const;
 		// Get the description of the parameters
 		std::string GetParamsDescr() const;		
 	protected:
-		CTopi* m_Topi;
+		CTopi<TLit, TUInd, Compress>* m_Topi;
 	};
 }

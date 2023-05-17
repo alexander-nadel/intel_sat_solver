@@ -8,5 +8,5 @@ To compile IntelSAT executable in Release mode, run make as follows: "make rs". 
 
 When using IntelSAT, please refer to the following paper:
 
-Alexander Nadel. Introducing Intel(R) SAT Solver. In SAT'22. To appear.
+Alexander Nadel. "Introducing Intel(R) SAT Solver", SAT'22.
 
