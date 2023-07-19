@@ -27,17 +27,46 @@ CTopi<TLit, TUInd, Compress>::TULit CTopi<TLit,TUInd,Compress>::Decide()
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+string CTopi<TLit, TUInd, Compress>::ChangeConfigToGiven(uint16_t configNum)
+{
+	//	cout << "\tc n <ConfigNum>" << endl;
+	if (m_DumpFile) (*m_DumpFile) << "n " << configNum << endl;
+
+	if (configNum == 0)
+	{
+		return "";
+	}
+
+	
+	auto newMode = (m_Mode + configNum) % m_Modes;
+	SetParam("/mode/value", (double)newMode);
+	
+	string ret = "/topor/mode/value " + to_string(newMode);
+
+	uint16_t flipCategory = configNum / (uint16_t)m_Modes;
+	if (flipCategory != 0)
+	{
+		SetParam("/decision/polarity/flip_factor", 1000 + flipCategory);
+		ret = ret + " /topor/decision/polarity/flip_factor " + to_string(1000 + flipCategory);
+	}	
+	return ret;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 bool CTopi<TLit,TUInd,Compress>::GetNextPolarityIsNegated(TUVar v)
 {
 	assert(!IsAssignedVar(v));
-	if (IsNotForced(v))
+	auto res = IsNotForced(v) ? (m_ParamPolarityStrat == 1 ? (bool)(rand() % 2) : m_AssignmentInfo[v].m_IsNegated) : m_PolarityInfo[v].GetNextPolarityIsNegated();
+
+	if (m_ParamPolarityFlipFactor != 0)
 	{
-		return m_ParamPolarityStrat == 1 ? (bool)(rand() % 2) : m_AssignmentInfo[v].m_IsNegated;
+		++m_NonForcedPolaritySelectionForFlip;
+		return m_NonForcedPolaritySelectionForFlip % m_ParamPolarityFlipFactor == 0 ? !res : res;
 	}
 	else
 	{
-		return m_PolarityInfo[v].GetNextPolarityIsNegated();
-	}	
+		return res;
+	}
 }
 
 template <typename TLit, typename TUInd, bool Compress>

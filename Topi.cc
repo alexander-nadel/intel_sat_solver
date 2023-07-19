@@ -578,23 +578,8 @@ bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 	{
 		assert(m_SelfContrOrGloballyUnsatAssumpSolveInv == m_Stat.m_SolveInvs || m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs);
 		assert(m_SelfContrOrGloballyUnsatAssumpSolveInv != m_LatestEarliestFalsifiedAssumpSolveInv);
-
-		if (m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs && !IsAssigned(m_LatestEarliestFalsifiedAssump))
-		{
-			NewDecLevel();
-
-			[[maybe_unused]] bool isContraditory = Assign(m_LatestEarliestFalsifiedAssump, BadULit, BadULit, m_DecLevel);
-			assert(!isContraditory);
-
-			TContradictionInfo contradictionInfo = BCP();
-			assert(contradictionInfo.IsContradiction());
-			m_Status = TToporStatus::STATUS_UNDECIDED;
-			ConflictAnalysisLoop(contradictionInfo, false, true);
-			if (unlikely(IsUnrecoverable())) return false;
-			assert(IsAssignedNegated(m_LatestEarliestFalsifiedAssump));
-			m_Status = TToporStatus::STATUS_UNSAT;
-		}
-
+		assert(m_LatestEarliestFalsifiedAssumpSolveInv != m_Stat.m_SolveInvs || IsAssigned(m_LatestEarliestFalsifiedAssump));
+		
 		// Making sure that we may return true only for one external variable out of a group mapped to the same internal variable
 		for (TLit& externalLit : m_UserAssumps)
 		{
@@ -768,15 +753,18 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 		}
 	}
 
-	// Assign all the remaining assumptions
-	if (m_ParamAssumpsConflictStrat == 0)
+	m_DecLevelOfLastAssignedAssumption = m_DecLevel;
+	if (firstUnassignedAssumpInd != m_Assumps.cap())
 	{
-		if (firstUnassignedAssumpInd != m_Assumps.cap())
+		TSpanTULit potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
+		bool someAssumpsAreUnassigned = true;
+		while (someAssumpsAreUnassigned)
 		{
-			TSpanTULit potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
+			someAssumpsAreUnassigned = false;
 			for (size_t assumpLitI = 0; assumpLitI < potentiallyUnassignedAssumpsSpan.size(); ++assumpLitI)
 			{
 				const TULit assumpLit = potentiallyUnassignedAssumpsSpan[assumpLitI];
+
 				if (!IsAssigned(assumpLit))
 				{
 					NewDecLevel();
@@ -785,34 +773,18 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 					assert(!isContraditory);
 
 					TContradictionInfo contradictionInfo = BCP();
+					ConflictAnalysisLoop(contradictionInfo, false, true);
+					if (unlikely(IsUnrecoverable())) return;
 
-					if (!contradictionInfo.IsContradiction() && m_EarliestFalsifiedAssump != BadULit)
+					if (m_EarliestFalsifiedAssump != BadULit)
 					{
-						m_LatestEarliestFalsifiedAssump = m_EarliestFalsifiedAssump;
-						m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;
 						SetStatus(TToporStatus::STATUS_UNSAT, "Falsified assumption discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
 						return;
 					}
 
-					if (contradictionInfo.IsContradiction())
+					if (!IsAssigned(assumpLit))
 					{
-						m_LatestEarliestFalsifiedAssump = assumpLit;
-						m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;
-
-						const auto contradictingCls = CiGetSpan(contradictionInfo, 2);
-						auto maxDecLevelInContradictingCls = max(GetAssignedDecLevel(contradictingCls[0]), GetAssignedDecLevel(contradictingCls[1]));
-						if (unlikely(maxDecLevelInContradictingCls == 0))
-						{
-							// Global contradiction!
-							SetStatus(TToporStatus::STATUS_CONTRADICTORY, "Global contradiction!");
-							return;
-						}
-
-						SetStatus(TToporStatus::STATUS_UNSAT, "Contradiction discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
-						// The case of one literal of the highest decision level is taken care of in BCP
-						assert(GetAssignedDecLevel(contradictingCls[0]) == GetAssignedDecLevel(contradictingCls[1]));
-						Backtrack(maxDecLevelInContradictingCls - 1);
-						return;
+						someAssumpsAreUnassigned = true;
 					}
 				}
 				else
@@ -820,54 +792,8 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 					assert(!IsFalsified(assumpLit));
 				}
 			}
-			assert(all_of(potentiallyUnassignedAssumpsSpan.begin(), potentiallyUnassignedAssumpsSpan.end(), [&](TULit l) { return IsAssigned(l); }));
 		}
-	}
-	else
-	{
-		assert(m_ParamAssumpsConflictStrat == 1);
-		m_DecLevelOfLastAssignedAssumption = m_DecLevel;
-		if (firstUnassignedAssumpInd != m_Assumps.cap())
-		{
-			TSpanTULit potentiallyUnassignedAssumpsSpan = m_Assumps.get_span_cap(firstUnassignedAssumpInd);
-			bool someAssumpsAreUnassigned = true;
-			while (someAssumpsAreUnassigned)
-			{
-				someAssumpsAreUnassigned = false;
-				for (size_t assumpLitI = 0; assumpLitI < potentiallyUnassignedAssumpsSpan.size(); ++assumpLitI)
-				{
-					const TULit assumpLit = potentiallyUnassignedAssumpsSpan[assumpLitI];
-
-					if (!IsAssigned(assumpLit))
-					{
-						NewDecLevel();
-
-						[[maybe_unused]] bool isContraditory = Assign(assumpLit, BadULit, BadULit, m_DecLevel);
-						assert(!isContraditory);
-
-						TContradictionInfo contradictionInfo = BCP();
-						ConflictAnalysisLoop(contradictionInfo);
-						if (unlikely(IsUnrecoverable())) return;
-
-						if (m_EarliestFalsifiedAssump != BadULit)
-						{
-							SetStatus(TToporStatus::STATUS_UNSAT, "Falsified assumption discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
-							return;
-						}
-
-						if (!IsAssigned(assumpLit))
-						{
-							someAssumpsAreUnassigned = true;
-						}
-					}
-					else
-					{
-						assert(!IsFalsified(assumpLit));
-					}
-				}
-			}
-			assert(all_of(potentiallyUnassignedAssumpsSpan.begin(), potentiallyUnassignedAssumpsSpan.end(), [&](TULit l) { return IsAssigned(l); }));
-		}
+		assert(all_of(potentiallyUnassignedAssumpsSpan.begin(), potentiallyUnassignedAssumpsSpan.end(), [&](TULit l) { return IsAssigned(l); }));
 	}
 }
 
@@ -1191,6 +1117,46 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		if (m_Status == TToporStatus::STATUS_UNDECIDED && isContradictionBeforeConflictAnalysis && Restart())
 		{
 			Backtrack(m_DecLevelOfLastAssignedAssumption, false, m_ParamReuseTrail);
+			if (M_GetNextUnitClause != nullptr)
+			{
+				const auto assignedVarsNumBefore = m_AssignedVarsNum;
+				
+				bool isContradictionWithAssumptions = false;
+				for (TLit eLit = M_GetNextUnitClause(m_ThreadId, true); eLit; eLit = M_GetNextUnitClause(m_ThreadId, false))
+				{
+					TULit l = E2I(eLit);
+					bool isContraditory = Assign(l, BadClsInd, BadULit, 0);
+					if (isContraditory)
+					{
+						if (GetAssignedDecLevel(l) == 0)
+						{
+							assert(NV(1) || P("Global contradiction when assigning an external unit clause\n"));
+							return TToporReturnVal::RET_UNSAT;
+						}	
+						else
+						{
+							isContradictionWithAssumptions = true;
+							Backtrack(GetLitDecLevel(l) - 1);							
+						}
+					}					
+				}
+
+				if (isContradictionWithAssumptions)
+				{
+					assert(NV(1) || P("Contradiction with assumptions when assigning an external unit clause\n"));
+					return TToporReturnVal::RET_UNSAT;
+				}
+
+				if (m_AssignedVarsNum > assignedVarsNumBefore)
+				{
+					TContradictionInfo contradictionInfo = BCP();
+					if (contradictionInfo.IsContradiction())
+					{
+						assert(NV(1) || P("Contradiction when propagating external unit clauses\n"));
+						return TToporReturnVal::RET_UNSAT;
+					}
+				}								
+			}
 		}
 	}
 
@@ -1205,6 +1171,15 @@ Topor::TToporLitVal CTopi<TLit, TUInd, Compress>::GetValue(TLit l) const
 
 	// litInternal can be BadULit if the external variable doesn't appear on any clauses
 	return litInternal == BadULit ? TToporLitVal::VAL_DONT_CARE : !IsAssigned(litInternal) ? TToporLitVal::VAL_UNASSIGNED : IsFalsified(litInternal) ? TToporLitVal::VAL_UNSATISFIED : TToporLitVal::VAL_SATISFIED;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+TLit CTopi<TLit, TUInd, Compress>::GetLitDecLevel(TLit l) const
+{
+	const TULit litInternal = E2I(l);
+	assert(litInternal < GetNextLit());
+
+	return GetAssignedDecLevel(litInternal);
 }
 
 template <typename TLit, typename TUInd, bool Compress>
@@ -1451,7 +1426,13 @@ string Topor::CTopi<TLit, TUInd, Compress>::GetMemoryLayout() const
 	return ss.str();
 }
 
-
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::SetParallelData(unsigned threadId, std::function<void(unsigned threadId, int lit)> ReportUnitClause, std::function<int(unsigned threadId, bool reinit)> GetNextUnitClause)
+{
+	m_ThreadId = threadId;
+	M_ReportUnitCls = ReportUnitClause;
+	M_GetNextUnitClause = GetNextUnitClause;
+}
 
 template class CTopi<int32_t, uint32_t, false>;
 template class CTopi<int32_t, uint64_t, false>;

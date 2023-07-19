@@ -66,6 +66,8 @@ namespace Topor
 		void DumpDrat(std::ofstream& openedDratFile, bool isDratBinary);
 		// Backtrack to the provided decision level
 		void Backtrack(TLit decLevel);
+		// Changing the configuration to # configNum, so that every configNum generates a unique configuration, where 0 makes no change. This is used for enabling different configs in parallel solving. Returns a unique configuration string"
+		std::string ChangeConfigToGiven(uint16_t configNum);
 
 		// Interrupt now
 		void InterruptNow();
@@ -82,6 +84,8 @@ namespace Topor
 		// Is assumption which appeared at assumps[assumpInd] during the latest Solve call, that is, is it part of the UNSAT core
 		// Sets the status to permanent error, if the latest Solve invocation didn't return TToporReturnVal::RET_UNSAT or if assumpInd >= assumps.size()
 		bool IsAssumptionRequired(size_t assumpInd);
+		// Get the decision level of the given literal (which must be assigned!)
+		TLit GetLitDecLevel(TLit l) const;
 
 		// Is there an error in the solver?
 		bool IsError() const;
@@ -92,6 +96,8 @@ namespace Topor
 		TToporStatistics<TLit, TUInd> GetStatistics() const;
 		// Get the description of the parameters
 		std::string GetParamsDescr() const;		
+
+		void SetParallelData(unsigned threadId, std::function<void(unsigned threadId, int lit)> ReportUnitClause, std::function<int(unsigned threadId, bool reinit)> GetNextUnitClause);		
 	protected:
 		CTopi<TLit, TUInd, Compress>* m_Topi;
 	};

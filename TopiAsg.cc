@@ -43,7 +43,7 @@ bool CTopi<TLit,TUInd,Compress>::DebugLongImplicationInvariantHolds(TULit l, TUV
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate)
+bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate, bool externalAssignment)
 {
 	assert(parentClsInd == BadClsInd || DebugLongImplicationInvariantHolds(l, decLevel, parentClsInd));
 	++m_Stat.m_Assignments;
@@ -57,6 +57,11 @@ bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit other
 	{
 		// Ignore if already assigned the same value; return false (contradiction), if assigned the opposite value
 		return isNegated;
+	}
+
+	if (M_ReportUnitCls != nullptr && decLevel == 0 && !externalAssignment)
+	{
+		M_ReportUnitCls(m_ThreadId, GetExternalLit(l));
 	}
 
 	// It is either that: (1) The trail is empty, or (2) The level is 0, or (3) A new level is started, or (4) The level is non-empty

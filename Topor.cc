@@ -87,6 +87,12 @@ Topor::TToporLitVal CTopor<TLit,TUInd,Compress>::GetLitValue(TLit l) const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+TLit CTopor<TLit, TUInd, Compress>::GetLitDecLevel(TLit l) const
+{
+	return m_Topi->GetLitDecLevel(l);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 std::vector<TToporLitVal> CTopor<TLit,TUInd,Compress>::GetModel() const
 {
 	return m_Topi->GetModel();
@@ -144,6 +150,18 @@ template <typename TLit, typename TUInd, bool Compress>
 void CTopor<TLit,TUInd,Compress>::Backtrack(TLit decLevel)
 {
 	m_Topi->Backtrack(decLevel, false, false, true);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+string CTopor<TLit,TUInd,Compress>::ChangeConfigToGiven(uint16_t configNum)
+{
+	return m_Topi->ChangeConfigToGiven(configNum);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+void CTopor<TLit, TUInd, Compress>::SetParallelData(unsigned threadId, std::function<void(unsigned threadId, int lit)> ReportUnitClause, std::function<int(unsigned threadId, bool reinit)> GetNextUnitClause)
+{
+	m_Topi->SetParallelData(threadId, ReportUnitClause, GetNextUnitClause);
 }
 
 namespace Topor

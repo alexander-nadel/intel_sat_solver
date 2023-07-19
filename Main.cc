@@ -107,8 +107,8 @@ using TLit = int32_t;
 template <typename TTopor>
 int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, vector<TLit>* varsToPrint = nullptr)
 {
-	CApplyFuncOnExitFromScope<> printStatusExplanation([&]() 
-	{ 
+	CApplyFuncOnExitFromScope<> printStatusExplanation([&]()
+	{
 		const string expl = topor.GetStatusExplanation();
 		if (!expl.empty())
 		{
@@ -144,7 +144,7 @@ int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, vect
 					PrintVal(v);
 				}
 			}
-			
+
 			cout << " 0" << endl;
 		}
 		return 10;
@@ -203,7 +203,8 @@ int main(int argc, char** argv)
 		cout << "\tc ll <LitToCreateInternalLit>" << endl;
 		cout << "\tc lc <ClearUserPolarityInfoLit>" << endl;
 		cout << "\tc b <BacktrackLevel>" << endl;
-		cout << "\tc s <Lit1 <Lit2> ... <Litn>: solve under the assumptions {<Lit1 <Lit2> ... <Litn>}" << endl;		
+		cout << "\tc n <ConfigNumber>" << endl;
+		cout << "\tc s <Lit1 <Lit2> ... <Litn>: solve under the assumptions {<Lit1 <Lit2> ... <Litn>}" << endl;
 		cout << "\tc The solver parses the p cnf vars clss line, but it ignores the number of clauses and uses the number of variables as a non-mandatory hint" << endl;
 		cout << print_as_color <ansi_color_code::red>("c Intel(R) SAT Solver executable parameters:") << endl;
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/solver_mode") << " : enum (0, 1, or 2); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "what type of solver to use in terms of clause buffer indexing and compression: 0 -- 32-bit index, uncompressed, 1 -- 64-bit index, uncompressed, 2 -- 64-bit index, bit-array compression \n";
@@ -211,6 +212,7 @@ int main(int argc, char** argv)
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/text_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a text DRAT proof (if more than one /topor_tool/bin_drat_file and /topor_tool/text_drat_file parameters provided, only the last one is applied, rest are ignored)\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the models for satisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the models for satisfiable invocations?\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the unsatisfiable cores for unsatisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_models_number") << " : unsigned long integer; default = 1" << print_as_color<ansi_color_code::green>("1") << " : " << "the maximal number of models for AllSAT. AllSAT with blocking clauses over /topor_tool/allsat_blocking_variables's variables is invoked if: (1) this parameter is greater than 1; (2) the CNF format is DIMACS without Topor-specific commands; (3) /topor_tool/allsat_blocking_variables is non-empty\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "if /topor_tool/allsat_models_number > 1, specifies the variables which will be used for blocking clauses, sperated by a comma, e.g., 1,4,5,6,7,15.\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables_file_alg") << " : string; default = " << print_as_color<ansi_color_code::green>("3") << " : " << "if /topor_tool/allsat_models_number > 1 and our parameter > 0, read the blocking variables from the first comment line in the file (format: c 1,4,5,6,7,15), where the value means: 1 -- assign lowest internal SAT variables to blocking; 2 -- assign highest internal SAT variables to blocking; >=3 -- assign their own internal SAT variables to blocking \n";
@@ -232,23 +234,24 @@ int main(int argc, char** argv)
 	string dratName("");
 	bool printModel = true;
 	bool verifyModel = false;
+	bool verifyUcore = false;
 	unsigned long allsatModels = 0;
 	vector<TLit> blockingVars;
 	unsigned long allsatBlockingFromInstanceAlg = 3;
 	// 0: 32-bit clause buffer index; 1: 64-bit clause buffer index; 2: 64-bit clause buffer index & bit-array-compression
 	uint8_t type_indexing_and_compression = 0;
-	
+
 	/*
 	* Identify the input file type, read it, read the parameters too
 	*/
-	
+
 	const string inputFileName = argv[1];
 	if (!filesystem::exists(inputFileName))
 	{
 		cout << "c topor_tool ERROR: the input file " << inputFileName << " doesn't exist" << endl;
 		return BadRetVal;
 	}
-	
+
 	// Does the signature match one of the archive types we support?
 
 	FILE* tmp = fopen(inputFileName.c_str(), "r");
@@ -260,9 +263,9 @@ int main(int argc, char** argv)
 
 	TArchiveFileType aFileType = TArchiveFileType::None;
 
-	int c = getc(tmp);	
+	int c = getc(tmp);
 	for (size_t currType = 0; c != EOF && currType < fileSig.size() && aFileType == TArchiveFileType::None; ++currType)
-	{		
+	{
 		const auto& currSig = fileSig[currType];
 
 		if (c == currSig[0])
@@ -270,7 +273,7 @@ int main(int argc, char** argv)
 			bool rightType = true;
 			c = getc(tmp);
 			for (uint8_t i = 1; c != EOF && currSig[i] != EOF; ++i, c = getc(tmp))
-			{				
+			{
 				if (c != currSig[i])
 				{
 					rightType = false;
@@ -291,7 +294,7 @@ int main(int argc, char** argv)
 				else
 				{
 					cout << " It will be read using gzlib.";
-				}				
+				}
 #else
 				cout << " The following command will be used to read it through a pipe : " <<
 					commandStringBeforeAndAfter[U(aFileType)].first << " " << inputFileName << " " << commandStringBeforeAndAfter[U(aFileType)].second;
@@ -300,14 +303,14 @@ int main(int argc, char** argv)
 			}
 		}
 	}
-	
+
 	fclose(tmp);
 
 	// Open the input file: it can be an archive file, in which case it is read as a pipe
 	// or a plain text file, which is read as a file
 #ifndef SKIP_ZLIB
 	const auto useZlib = aFileType == TArchiveFileType::GZ || aFileType == TArchiveFileType::None;
-	FILE* f = useZlib ? (FILE*)gzopen(inputFileName.c_str(), "r") : 
+	FILE* f = useZlib ? (FILE*)gzopen(inputFileName.c_str(), "r") :
 		popen((commandStringBeforeAndAfter[U(aFileType)].first + " " + inputFileName + " " + commandStringBeforeAndAfter[U(aFileType)].second).c_str(), "r");
 #else
 	const auto useFopen = aFileType == TArchiveFileType::None;
@@ -372,7 +375,7 @@ int main(int argc, char** argv)
 		assert(!AllToporsNull());
 		topor32 ? topor32->CreateInternalLit(v) : topor64 ? topor64->CreateInternalLit(v) : toporc->CreateInternalLit(v);
 	};
-	
+
 	auto ToporBoostScore = [&](TLit v, double value = 1.0)
 	{
 		assert(!AllToporsNull());
@@ -383,6 +386,18 @@ int main(int argc, char** argv)
 	{
 		assert(!AllToporsNull());
 		topor32 ? topor32->Backtrack(decLevel) : topor64 ? topor64->Backtrack(decLevel) : toporc->Backtrack(decLevel);
+	};
+
+	auto ToporChangeConfigToGiven = [&](uint16_t configNum)
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->ChangeConfigToGiven(configNum) : topor64 ? topor64->ChangeConfigToGiven(configNum) : toporc->ChangeConfigToGiven(configNum);
+	};
+
+	auto ToporGetLitDecLevel = [&](TLit l)
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->GetLitDecLevel(l) : topor64 ? topor64->GetLitDecLevel(l) : toporc->GetLitDecLevel(l);
 	};
 
 	auto ToporSolve = [&](const std::span<TLit> assumps = {}, std::pair<double, bool> toInSecIsCpuTime = std::make_pair((std::numeric_limits<double>::max)(), true), uint64_t confThr = (std::numeric_limits<uint64_t>::max)())
@@ -408,12 +423,18 @@ int main(int argc, char** argv)
 		return topor32 ? OnFinishingSolving(*topor32, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : OnFinishingSolving(*toporc, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint);
 	};
 
+	auto ToporIsAssumptionRequired = [&](size_t assumpInd)
+	{
+		assert(!AllToporsNull());
+		return topor32 ? topor32->IsAssumptionRequired(assumpInd) : topor64 ? topor64->IsAssumptionRequired(assumpInd) : toporc->IsAssumptionRequired(assumpInd);
+	};
+
 	TToporReturnVal ret = TToporReturnVal::RET_EXOTIC_ERROR;
 
 	ofstream dratFile;
-	
-	CApplyFuncOnExitFromScope<> onExit([&]() 
-	{ 
+
+	CApplyFuncOnExitFromScope<> onExit([&]()
+	{
 #ifndef SKIP_ZLIB
 		useZlib ? gzclose(gzFile(f)) : pclose(f);
 #else
@@ -442,7 +463,7 @@ int main(int argc, char** argv)
 	// p cnf vars clss: the header (must appear before clauses; handled as recommendation only)
 	// Lit1 Lit2 ... LitN 0: 0-ended clause
 	// "s Lit1 Lit2 ... LitN": solve under the given assumption
-	
+
 	uint64_t lineNum = 1;
 	bool pLineRead = false;
 	int retValBasedOnLatestSolve = BadRetVal;
@@ -479,10 +500,10 @@ int main(int argc, char** argv)
 
 
 	auto CreateToporInst = [&](TLit varsNumHint = 0)
-	{		
+	{
 		pLineRead = true;
 
-		auto CreateToporsIfRequired = [&]()		
+		auto CreateToporsIfRequired = [&]()
 		{
 			if (AllToporsNull())
 			{
@@ -572,7 +593,7 @@ int main(int argc, char** argv)
 
 					return ulVal;
 				};
-				
+
 				// /topor_tool/ prefix length
 				static constexpr size_t ttPrefixLen = 12;
 				if (paramNameStr.substr(0, ttPrefixLen) == "/topor_tool/")
@@ -606,6 +627,17 @@ int main(int argc, char** argv)
 						cout << "c /topor_tool/verify_model " << paramValStr << endl;
 						string errMsg;
 						verifyModel = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "verify_ucore")
+					{
+						cout << "c /topor_tool/verify_ucore " << paramValStr << endl;
+						string errMsg;
+						verifyUcore = ReadBoolParam(errMsg);
 						if (!errMsg.empty())
 						{
 							cout << errMsg;
@@ -670,7 +702,7 @@ int main(int argc, char** argv)
 				}
 				else
 				{
-					CreateToporsIfRequired();					
+					CreateToporsIfRequired();
 					if (AllToporsNull())
 					{
 						cout << "c topor_tool ERROR: couldn't create Topor instance" << endl;
@@ -747,7 +779,7 @@ int main(int argc, char** argv)
 						cout << "c ERROR: assumptions " << a << " is not satisfied!" << endl;
 						return BadRetVal;
 					}
-				}			
+				}
 			}
 			cout << "c topor_tool: assumptions verified!" << endl;
 		}
@@ -781,14 +813,14 @@ int main(int argc, char** argv)
 		return 10;
 	};
 
-	constexpr size_t maxSz = (size_t)1 << 28;	
+	constexpr size_t maxSz = (size_t)1 << 28;
 	char* line = (char*)malloc(maxSz);
 	if (line == nullptr)
 	{
 		cout << "c topor_tool ERROR: couldn't allocate " + to_string(maxSz) + " bytes for reading the lines" << endl;
 		return BadRetVal;
 	}
-	
+
 	auto ReadLine = [&](FILE* f, char* l, size_t maxChars)
 	{
 #ifndef SKIP_ZLIB
@@ -835,7 +867,7 @@ int main(int argc, char** argv)
 				{
 					throw logic_error("c topor_tool ERROR: expected the first comment to contain blocking variables at line number " + to_string(lineNum) + ". Error message: " + errMsg);
 				}
-				
+
 				if (allsatBlockingFromInstanceAlg == 1)
 				{
 					for (TLit l : blockingVars)
@@ -862,7 +894,7 @@ int main(int argc, char** argv)
 		if (line[currLineI] == 'r')
 		{
 			string lStr = line;
-			
+
 			const size_t paramNameStart = 2;
 			const size_t paramNameEnd = lStr.find(' ', 2);
 			if (paramNameEnd == string::npos)
@@ -871,17 +903,17 @@ int main(int argc, char** argv)
 			}
 			const string paramName = lStr.substr(paramNameStart, paramNameEnd - paramNameStart);
 			const string paramVal = lStr.substr(paramNameEnd + 1);
-			
+
 			double paramValDouble = numeric_limits<double>::infinity();
 			try
 			{
-				paramValDouble = stod(paramVal);				
+				paramValDouble = stod(paramVal);
 			}
 			catch (...)
 			{
 				throw logic_error("c topor_tool ERROR: couldn't convert the parameter value to double at line number " + to_string(lineNum));
 			}
-			
+
 			ToporSetParam(paramName, paramValDouble);
 
 			continue;
@@ -890,7 +922,7 @@ int main(int argc, char** argv)
 		if (line[currLineI] == 'o')
 		{
 			string lStr = line;
-				
+
 			// cout << "\tc ot <TimeOut> <IsCpuTimeOut>" << endl;
 			// cout << "\tc oc <ConflictThreshold>" << endl;
 			if (lStr[1] != 't' && lStr[1] != 'c')
@@ -921,7 +953,7 @@ int main(int argc, char** argv)
 				{
 					throw logic_error("c topor_tool ERROR: couldn't convert <TimeOut> to double at line number " + to_string(lineNum));
 				}
-				
+
 				const string isCpuTimeOutStr = lStr.substr(toNameEnd + 1);
 				int isCpuTimeOut = numeric_limits<int>::max();
 				try
@@ -932,7 +964,7 @@ int main(int argc, char** argv)
 				{
 					throw logic_error("c topor_tool ERROR: couldn't convert <IsCpuTimeOut> to int at line number " + to_string(lineNum));
 				}
-				
+
 				if (isCpuTimeOut < 0 || isCpuTimeOut > 1)
 				{
 					throw logic_error("c topor_tool ERROR: couldn't convert <IsCpuTimeOut> to 0 or 1 at line number " + to_string(lineNum));
@@ -943,7 +975,7 @@ int main(int argc, char** argv)
 			{
 				assert(lStr[1] == 'c');
 				const string cThrStr = lStr.substr(3);
-				
+
 				try
 				{
 					nextSolveConfThr = (uint64_t)stoull(cThrStr);
@@ -991,7 +1023,7 @@ int main(int argc, char** argv)
 		};
 
 		if (line[currLineI] == 'l')
-		{			
+		{
 			string lStr = line;
 
 			// cout << "\tc lb <BoostScoreLit> <Mult>" << endl;
@@ -1008,7 +1040,7 @@ int main(int argc, char** argv)
 				throw logic_error("c topor_tool ERROR: The 3nd character must be a space at line number " + to_string(lineNum));
 			}
 
-			currLineI += 2;			
+			currLineI += 2;
 			TLit lit = (TLit)ParseNumber();
 
 			if (lStr[1] == 'c')
@@ -1033,7 +1065,8 @@ int main(int argc, char** argv)
 					throw logic_error("c topor_tool ERROR: couldn't convert <FixPolarityLit> to 0 or 1 at line number " + to_string(lineNum));
 				}
 				ToporFixPolarity(lit, (bool)isOnlyOnce);
-			} else if (lStr[1] == 'l')
+			}
+			else if (lStr[1] == 'l')
 			{
 				ToporCreateInternalLit(lit);
 			}
@@ -1057,7 +1090,7 @@ int main(int argc, char** argv)
 
 			continue;
 		}
-	
+
 		if (line[currLineI] == 'b')
 		{
 			// cout << "\tc b <BacktrackLevel>" << endl;
@@ -1068,8 +1101,44 @@ int main(int argc, char** argv)
 
 			++currLineI;
 			auto dl = ParseNumber();
-			
+
 			ToporBacktrack((TLit)dl);
+
+			continue;
+		}
+
+		if (line[currLineI] == 'n')
+		{
+			// cout << "\tc n <ConfigNum>" << endl;
+			if (line[1] != ' ')
+			{
+				throw logic_error("c topor_tool ERROR: The 2nd character must be a space at line number " + to_string(lineNum));
+			}
+
+			++currLineI;
+			auto configNum = ParseNumber();
+			if (configNum < 0 || configNum > numeric_limits<uint16_t>::max())
+			{
+				throw logic_error("c topor_tool ERROR: The configuration number " + to_string(configNum) + " must be a uint_16 integer at line number " + to_string(lineNum));
+			}
+
+			string str = ToporChangeConfigToGiven((uint16_t)configNum);
+
+			// Erase all Occurrences of given substring from main string.
+			auto EraseAllSubStr = [&](string& mainStr, const string& toErase)
+			{
+				size_t pos = std::string::npos;
+				// Search for the substring in string in a loop until nothing is found
+				while ((pos = mainStr.find(toErase)) != std::string::npos)
+				{
+					// If found then erase it from string
+					mainStr.erase(pos, toErase.length());
+				}
+			};
+
+			EraseAllSubStr(str, "/topor");
+
+			cout << "c converted configuration number " << to_string(configNum) << " to parameters " << str << endl;
 
 			continue;
 		}
@@ -1088,7 +1157,7 @@ int main(int argc, char** argv)
 			{
 				cout << "c topor_tool ERROR: couldn't parse the p-line as 'p cnf <VARS> <CLSS>' at line number " << lineNum << endl;
 				return BadRetVal;
-			}			
+			}
 
 			try
 			{
@@ -1189,13 +1258,36 @@ int main(int argc, char** argv)
 			nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
 			nextSolveConfThr = numeric_limits<uint64_t>::max();
 
-			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal : 
+			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
 				topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
 
 			if (verifyModel && retValBasedOnLatestSolve == 10)
 			{
 				if (VerifyModel(&assumps) == BadRetVal) return BadRetVal;
 			}
+
+			if (verifyUcore && retValBasedOnLatestSolve == 20)
+			{
+				vector<TLit> ucAssumps;
+				for (unsigned i = 0; i < assumps.size() && assumps[i] != 0; ++i)
+				{
+					cout << "Assumption #" << to_string(i) << " -- " << assumps[i] << " : " << ToporIsAssumptionRequired(i) << endl;
+					if (ToporIsAssumptionRequired(i))
+					{
+						ucAssumps.emplace_back(assumps[i]);
+					}
+				}
+				ret = ToporSolve(ucAssumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
+				retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
+					topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
+				if (retValBasedOnLatestSolve != 20)
+				{
+					cout << "ret == " << to_string(retValBasedOnLatestSolve) << ": UNSAT CORE BUG!!!!!\n";
+					return BadRetVal;
+				}
+
+			}
+
 			continue;
 		}
 
@@ -1214,20 +1306,19 @@ int main(int argc, char** argv)
 	}
 
 	free(line);
-	
+
 	if (!AllToporsNull() && ToporGetStatisticsSolveInst() == 0)
 	{
-		ret = ToporSolve();
-		retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
-		if (verifyModel && retValBasedOnLatestSolve == 10)
-		{
-			if (VerifyModel() == BadRetVal) return BadRetVal;
-		}
-
 		if (allsatModels > 1 && !blockingVars.empty())
 		{
+			ret = ToporSolve();
+			retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
+			if (verifyModel && retValBasedOnLatestSolve == 10)
+			{
+				if (VerifyModel() == BadRetVal) return BadRetVal;
+			}
+
 			vector<TLit> cls;
-			
 			for (unsigned long currModelNum = 1; currModelNum < allsatModels && retValBasedOnLatestSolve == 10; ++currModelNum)
 			{
 				cout << "c topor_tool: before adding a blocking clause and calling the solver for time " << currModelNum + 1 << " out of " << allsatModels << endl;
@@ -1246,7 +1337,8 @@ int main(int argc, char** argv)
 				{
 					if (VerifyModel() == BadRetVal) return BadRetVal;
 				}
-			}			
+			}
+
 		}
 	}
 

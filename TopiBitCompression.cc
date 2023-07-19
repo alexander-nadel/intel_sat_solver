@@ -132,7 +132,9 @@ CTopi<TLit, TUInd, Compress>::TBCInd CTopi<TLit, TUInd, Compress>::BCCompress(sp
 	const TBCInd bci(bcHashId, bitStart);
 	if (bci.IsError())
 	{
-		SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, "BCCompress: index too narrow");
+		stringstream ss;
+		ss << "BCCompress: index too narrow -- bcHashId = " << hex << bcHashId << "; bitStart = " << dec << bitStart;
+		SetStatus(TToporStatus::STATUS_INDEX_TOO_NARROW, ss.str());
 	}
 
 	return bci;

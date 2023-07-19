@@ -18,7 +18,7 @@ string CTopi<TLit, TUInd, Compress>::SVar(TUVar v) const
 	if (IsAssignedVar(v))
 	{
 		ss << "@" << m_VarInfo[v].m_DecLevel;
-		const auto s = m_VsidsHeap.get_var_score(v);
+		[[maybe_unused]] const auto s = m_VsidsHeap.get_var_score(v);
 		/*if (s != 0)
 		{
 			ss << "=" << s;
@@ -224,7 +224,7 @@ void CTopi<TLit, TUInd, Compress>::VerifyDebugModel()
 	{
 		stringstream ss;
 
-		const auto elit = IsNeg(l) ? -m_I2ELitMap[GetVar(l)] : m_I2ELitMap[GetVar(l)];
+		const auto elit = GetExternalLit(l);
 		ss << "{index " << l << " : ilit " << SLit(l) << " : elit " << elit << "; debugModel = " << (elit > 0 ? m_DebugModel[elit] : m_DebugModel[-elit]) << "}";
 
 		return ss.str();

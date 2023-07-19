@@ -63,6 +63,7 @@ namespace Topor
 		TToporReturnVal Solve(const span<TLit> userAssumps = {}, pair<double, bool> toInSecIsCpuTime = make_pair(numeric_limits<double>::max(), true), uint64_t confThr = numeric_limits<uint64_t>::max());
 		bool IsAssumptionRequired(size_t assumpInd);
 		TToporLitVal GetValue(TLit l) const;
+		TLit GetLitDecLevel(TLit l) const;
 		std::vector<TToporLitVal> GetModel() const;
 		TToporStatistics<TLit, TUInd> GetStatistics() const;		
 		string GetParamsDescr() const;
@@ -98,7 +99,13 @@ namespace Topor
 		void ClearUserPolarityInfo(TLit vExternal);		
 		// Backtrack to the end of decLevel; the 2nd parameter is required for statistics only
 		// DUMPS
-		void Backtrack(TLit decLevel, bool isBCPBacktrack = false, bool reuseTrail = false, bool isAPICall = false);
+		void Backtrack(TLit decLevel, bool isBCPBacktrack = false, bool reuseTrail = false, bool isAPICall = false);		
+		// Changing the configuration to # configNum, so that every configNum generates a unique configuration
+		// This is used for enabling different configs in parallel solving
+		// DUMPS
+		string ChangeConfigToGiven(uint16_t configNum);
+		// Set the relevant data for a higher-level parallel solver
+		void SetParallelData(unsigned threadId, std::function<void(unsigned threadId, int lit)> ReportUnitClause, std::function<int(unsigned threadId, bool reinit)> GetNextUnitClause);		
 	protected:	
 		/*
 		* Internal types
@@ -169,6 +176,7 @@ namespace Topor
 		// Parameters: decision
 		CTopiParam<uint8_t> m_ParamInitPolarityStrat = { m_Params, "/decision/polarity/init_strategy", "The initial polarity for a new variable: 0: negative; 1: positive; 2: random",  {1, 1, 1, 1, 1, 2, 1, 1, 1}, 0, 2 };
 		CTopiParam<uint8_t> m_ParamPolarityStrat = { m_Params, "/decision/polarity/strategy", "How to set the polarity for a non-forced variable: 0: phase saving; 1: random", 0, 0, 1 };
+		CTopiParam<uint32_t> m_ParamPolarityFlipFactor = { m_Params, "/decision/polarity/flip_factor", "If non-0, every N's polarity selection will be flipped", 0};
 		CTopiParam<double> m_ParamVarActivityInc = { m_Params, "/decision/vsids/var_activity_inc", "Variable activity bumping factor's initial value: m_PosScore[v].m_Score += m_VarActivityInc is carried out for every variable visited during a conflict (hard-coded to 1.0 in Glucose-based solvers)", {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 1.0}, 0.0 };
 		CTopiParam<double> m_ParamVarActivityIncDecay = { m_Params, "/decision/vsids/var_activity_inc_decay", "After each conflict, the variable activity bumping factor is increased by multiplication by 1/m_ParamVarActivityIncDecay (the initial value is provided in the parameter):  m_ParamVarActivityInc *= (1 / m_ParamVarActivityIncDecay), where it's 0.8 in Glucose-based solvers and 0.95 in Minisat", {0.95, 0.8, 0.8, 0.8, 0.8, 0.925, 0.8, 0.95, 0.925}, numeric_limits<double>::epsilon(), 1.0 };
 		CTopiParam<bool> m_ParamVarActivityIncDecayReinitN = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_n", "Re-initialize /decision/vsids/var_activity_inc_decay before normal incremental Solve?", {true, false, false, false, false, false, false, true, false} };
@@ -238,8 +246,7 @@ namespace Topor
 		// Parameters: assumptions handling
 		CTopiParam<bool> m_ParamAssumpsSimpAllowReorder = { m_Params, "/assumptions/allow_reorder", "Assumptions handling: allow reordering assumptions when filtering", true };
 		CTopiParam<bool> m_ParamAssumpsIgnoreInGlue = { m_Params, "/assumptions/ignore_in_glue", "Assumptions handling: ignore assumptions when calculating the glue score (following the SAT'13 paper \"Improving Glucose for Incremental SAT Solving with Assumptions : Application to MUS Extraction\")", false };
-		CTopiParam<uint8_t> m_ParamAssumpsConflictStrat = { m_Params, "/assumptions/conflict_strat", "Assumptions conflict handling strategy: 0 -- backtrack on conflict and post-process in UNSAT core extraction; 1 -- handle conflicts eagerly", {0, 0, 0, 0, 1, 0, 0, 0, 0}, 0, 1 };
-
+		
 		// Parameters: conflict analysis
 		CTopiParam<bool> m_ParamMinimizeClausesMinisat = { m_Params, "/conflicts/minimize_clauses", "Conflict analysis: apply deep conflict clause minimization", true };
 		CTopiParam<uint32_t> m_ParamMinimizeClausesBinMaxSize = { m_Params, "/conflicts/bin_res_max_size", "Conflict analysis: maximal size to apply binary minimization (both this condition and maximal LBD must hold; 30 in Glucose, Fiver, Maple)", {30, 30, 30, 30, 50, 30, 30, 30, 30} };
@@ -361,7 +368,8 @@ namespace Topor
 		CVector<TLit> m_NewExternalVarsAddUserCls;
 		// internal variable-->external literal map (initialized only, if required, e.g., for callbacks)
 		CDynArray<TLit> m_I2ELitMap;
-		bool UseI2ELitMap() const { return m_ParamVerifyDebugModelInvocation != 0 || IsCbLearntOrDrat(); }
+		inline TLit GetExternalLit(TULit iLit) { return IsNeg(iLit) ? -m_I2ELitMap[GetVar(iLit)] : m_I2ELitMap[GetVar(iLit)]; }
+		bool UseI2ELitMap() const { return m_ParamVerifyDebugModelInvocation != 0 || IsCbLearntOrDrat() || M_ReportUnitCls != nullptr; }
 		
 		static constexpr TLit ExternalLit2ExternalVar(TLit l) { return l > 0 ? l : -l; }
 		inline TULit E2I(TLit l) const
@@ -2180,7 +2188,7 @@ protected:
 		CDynArray<TVarInfo> m_VarInfo;
 		CDynArray<TPolarityInfo> m_PolarityInfo;
 		bool m_UpdateParamsWhenVarFixedDone = false;
-
+		uint32_t m_NonForcedPolaritySelectionForFlip = 0;
 		inline bool IsAssignedVar(TUVar v) const
 		{
 			return m_AssignmentInfo[v].m_IsAssigned;
@@ -2285,7 +2293,7 @@ protected:
 		}
 		
 		// Returns true iff the assignment is contradictory
-		bool Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate = true);
+		bool Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate = true, bool externalAssignment = false);
 		void Unassign(TULit l);
 		void UnassignVar(TUVar v, bool reuseTrail = false);
 		[[maybe_unused]] bool DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd parentClsIndIfLong);
@@ -2814,6 +2822,14 @@ protected:
 		bool m_InterruptNow = false;
 		TCbNewLearntCls<TLit> M_CbNewLearntCls = nullptr;
 		CVector<TLit> m_UserCls;
+
+		/*
+		* Parallel support
+		*/
+
+		unsigned m_ThreadId = std::numeric_limits<unsigned>::max();
+		std::function<void(unsigned id, int lit)> M_ReportUnitCls = nullptr;
+		std::function<int(unsigned threadId, bool reinit)> M_GetNextUnitClause = nullptr;
 
 		/*
 		* Debugging

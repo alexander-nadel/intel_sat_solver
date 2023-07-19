@@ -34,7 +34,9 @@ void CTopi<TLit, TUInd, Compress>::SwapCurrWatch(TULit l, typename CCls::TIterat
 	swap(cls[0], *newWatchIt);
 	WLAddLongWatch(cls[0], cls[1], clsInd);
 	// The line below is required to support the (very rare) occasions  of WLB's realloc actually moving m_W in WLAddLongWatch
-	currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+	// Using get_ptr_no_assert, since WLAddLongWatch might reallocate m_W, which might cause, 
+	// when there are no long watches in wi, wi.m_WBInd to be higher than the capacity of m_W, which causes a failure assertion
+	currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 };
 
 template <typename TLit, typename TUInd, bool Compress>
@@ -445,7 +447,7 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 						SwapWatch(clsInd, true, maxNonWLDecLevelIt);
 						if (unlikely(IsUnrecoverable())) return TContradictionInfo();
 						// The line below is required to support the (very rare) occasions of b's realloc actually moving b in WLAddLongWatch
-						currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+						currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 					}
 				}
 
@@ -460,12 +462,12 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 				if (unlikely(!stopPropagating && m_CurrPropWatchModifiedDuringProcessDelayedImplication))
 				{
 					currLongWatchInd = -1;
-					currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) - (1 * TWatchInfo::BinsInLong);
+					currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) - (1 * TWatchInfo::BinsInLong);
 				}
 				else
 				{
 					// The line below is required to support the (very rare) occasions  of b's realloc in ProcessDelayedImplication actually moving b in WLAddLongWatch
-					currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+					currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 				}
 			}
 			else if (IsFalsified(cls[0]) && !IsAssigned(cls[1]))
@@ -478,7 +480,7 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 				{
 					stopPropagating = ReuseTrail();
 					// ReuseTrail might realloc, hence updating currLongWatchPtr
-					currLongWatchPtr = m_W.get_ptr(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
+					currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
 				}
 			}
 			else

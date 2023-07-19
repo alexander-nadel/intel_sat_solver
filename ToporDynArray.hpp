@@ -236,6 +236,11 @@ namespace Topor
 			return m_B + i;
 		}
 
+		inline T* get_ptr_no_assert(size_t i = 0)
+		{
+			return m_B + i;
+		}
+
 		inline T* get_const_ptr(size_t i = 0) const
 		{
 			assert(i < m_Cap);
