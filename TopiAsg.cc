@@ -109,7 +109,7 @@ bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit other
 	++m_AssignedVarsNum;
 
 	if (m_AssignmentInfo[v].m_IsAssump && IsAssumpFalsifiedGivenVar(v) && 
-		(m_EarliestFalsifiedAssump == BadULit || !IsAssigned(m_EarliestFalsifiedAssump) || GetAssignedDecLevel(l) < GetAssignedDecLevel(m_EarliestFalsifiedAssump)))
+		(m_EarliestFalsifiedAssump == BadULit || !IsAssigned(m_EarliestFalsifiedAssump) || GetAssignedDecLevel(l) <= GetAssignedDecLevel(m_EarliestFalsifiedAssump)))
 	{
 		m_LatestEarliestFalsifiedAssump = m_EarliestFalsifiedAssump = GetAssumpLitForVar(v);
 		m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;

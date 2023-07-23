@@ -578,7 +578,7 @@ bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 	{
 		assert(m_SelfContrOrGloballyUnsatAssumpSolveInv == m_Stat.m_SolveInvs || m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs);
 		assert(m_SelfContrOrGloballyUnsatAssumpSolveInv != m_LatestEarliestFalsifiedAssumpSolveInv);
-		assert(m_LatestEarliestFalsifiedAssumpSolveInv != m_Stat.m_SolveInvs || IsAssigned(m_LatestEarliestFalsifiedAssump));
+		assert(m_LatestEarliestFalsifiedAssumpSolveInv != m_Stat.m_SolveInvs || IsAssigned(m_LatestEarliestFalsifiedAssump));		
 		
 		// Making sure that we may return true only for one external variable out of a group mapped to the same internal variable
 		for (TLit& externalLit : m_UserAssumps)
@@ -773,7 +773,7 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 					assert(!isContraditory);
 
 					TContradictionInfo contradictionInfo = BCP();
-					ConflictAnalysisLoop(contradictionInfo, false, true);
+					ConflictAnalysisLoop(contradictionInfo, false);
 					if (unlikely(IsUnrecoverable())) return;
 
 					if (m_EarliestFalsifiedAssump != BadULit)
@@ -1090,7 +1090,15 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 
 		if (m_EarliestFalsifiedAssump != BadULit)
 		{
-			SetStatus(TToporStatus::STATUS_UNSAT, "Assumption flipped!");
+			assert(IsAssigned(m_EarliestFalsifiedAssump));
+			if (unlikely(!IsAssigned(m_EarliestFalsifiedAssump)))
+			{
+				SetStatus(TToporStatus::STATUS_ASSUMPTION_REQUIRED_ERROR, "Internal error: earliest falsified assumption must be assigned");
+			}
+			else
+			{
+				SetStatus(TToporStatus::STATUS_UNSAT, "Assumption flipped!");
+			}
 		}
 		else if (!contradictionInfo.IsContradiction() && m_AssignedVarsNum == m_LastExistingVar)
 		{

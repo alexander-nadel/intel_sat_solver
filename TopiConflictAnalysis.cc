@@ -455,7 +455,7 @@ size_t CTopi<TLit, TUInd, Compress>::SizeWithoutDecLevel0(const span<TULit> cls)
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd, Compress>::LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed, bool reachDecisionMaxLevel)
+pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd, Compress>::LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed)
 {
 	clsBeforeAllUipOrEmptyIfAllUipFailed.clear();
 	++m_Stat.m_Conflicts;
@@ -552,8 +552,10 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 	m_VarsParentSubsumed.clear();
 
 	TUVar v = m_TrailEnd;
-
-	for (; varsToVisitCurrDecLevel != 1 || (reachDecisionMaxLevel && m_DecLevel != 0 && !IsAssignedAndDecVar(v)); v = m_VarInfo[v].m_TrailPrev)
+	const TUV vDecLevel = GetAssignedDecLevelVar(v);
+	const TUVar vDecVar = GetDecVar(vDecLevel);
+	const bool isAssumpLevel = IsAssumpVar(vDecVar);
+	for (; varsToVisitCurrDecLevel != 1 || (isAssumpLevel && !IsSatisfiedAssump(v)); v = m_VarInfo[v].m_TrailPrev)
 	{
 		auto& ai = m_AssignmentInfo[v];
 		auto& vi = m_VarInfo[v];
@@ -1233,7 +1235,7 @@ void CTopi<TLit, TUInd, Compress>::RemoveLitsFromSubsumed()
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail, bool assumpMode)
+void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail)
 {
 	while (m_Status == TToporStatus::STATUS_UNDECIDED && contradictionInfo.IsContradiction())
 	{
@@ -1257,10 +1259,10 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 
 		Backtrack(maxDecLevelInContradictingCls);
 		CVector<TULit> clsBeforeAllUipOrEmptyIfAllUipFailed;
-		auto [cls, assertingClsInd] = LearnAndUpdateHeuristics(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed, assumpMode);
+		auto [cls, assertingClsInd] = LearnAndUpdateHeuristics(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed);
 		//assert(m_ParamVerbosityLevel <= 2 || P("***** Learnt clause " + SLits(cls) + "\n"));
 		if (unlikely(IsUnrecoverable())) return;
-		if (assumpMode) m_FlippedLit = BadULit;
+		if (m_EarliestFalsifiedAssump != BadULit) m_FlippedLit = BadULit;
 		auto [additionalCls, additionalAssertingClsInd] = RecordFlipped(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed.empty() ? cls : clsBeforeAllUipOrEmptyIfAllUipFailed);
 		if (unlikely(IsUnrecoverable())) return;
 
@@ -1288,7 +1290,7 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		assert(cls.size() <= 2 || GetAssignedDecLevel(cls[1]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2)));
 
 		TUV ncbBtLevel = cls.size() > 1 ? GetAssignedDecLevel(cls[1]) : 0;
-		if (!assumpMode && ncbBtLevel < m_DecLevelOfLastAssignedAssumption)
+		if (m_EarliestFalsifiedAssump == BadULit && ncbBtLevel < m_DecLevelOfLastAssignedAssumption)
 		{
 			// We don't want to backtrack lower than the assumptions to prevent assumption re-propagation
 			ncbBtLevel = m_DecLevelOfLastAssignedAssumption;
@@ -1310,8 +1312,8 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		}
 
 		// Determine how to backtrack 		
-		const bool isChronoBt = assumpMode || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
-		const auto btLevel = isChronoBt ? (assumpMode || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
+		const bool isChronoBt = m_EarliestFalsifiedAssump != BadULit || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
+		const auto btLevel = isChronoBt ? (m_EarliestFalsifiedAssump != BadULit || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
 		Backtrack(btLevel, false, reuseTrail);
 		Assign(m_FlippedLit = cls[0], cls.size() >= 2 ? assertingClsInd : BadClsInd, cls.size() == 1 ? BadULit : cls[1], cls.size() == 1 ? 0 : GetAssignedDecLevel(cls[1]));
 		assert(NV(2) || P("***** Flipped former UIP to " + SLit(cls[0]) + "\n"));

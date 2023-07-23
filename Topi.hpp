@@ -2391,6 +2391,7 @@ protected:
 		inline bool IsAssumpVar(TUVar v) const { return m_AssignmentInfo[v].m_IsAssump; }
 		inline bool IsAssumpFalsifiedGivenVar(TUVar v) const { assert(IsAssumpVar(v)); return IsFalsified(GetLit(v, false)) != m_AssignmentInfo[v].m_IsAssumpNegated; }
 		inline TULit GetAssumpLitForVar(TUVar v) const { assert(IsAssumpVar(v)); return GetLit(v, m_AssignmentInfo[v].m_IsAssumpNegated); }
+		inline bool IsSatisfiedAssump(TUVar v) const { return IsAssumpVar(v) && IsSatisfied(GetAssumpLitForVar(v)); }
 
 		// Assumption-UNSAT-core-related
 		// 
@@ -2450,10 +2451,10 @@ protected:
 		* Conflict Analysis and Learning
 		*/
 		
-		void ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail = false, bool assumpMode = false);
+		void ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail = false);
 
 		// Return: (1) asserting clause span; (2) Clause index (for long clauses)		
-		pair<TSpanTULit, TUInd> LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed, bool reachDecisionMaxLevel = false);
+		pair<TSpanTULit, TUInd> LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed);
 		// Return a flipped clause if: 
 		// (1) Flipped recording is on; (2) The current level is flipped; (3) The flipped clause is not subsumed by the main clause
 		// The return span is empty iff the recording is unsuccessful (in which case TUInd is BadParentClsInd too)
