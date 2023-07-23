@@ -1290,7 +1290,8 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		assert(cls.size() <= 2 || GetAssignedDecLevel(cls[1]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2)));
 
 		TUV ncbBtLevel = cls.size() > 1 ? GetAssignedDecLevel(cls[1]) : 0;
-		if (m_EarliestFalsifiedAssump == BadULit && ncbBtLevel < m_DecLevelOfLastAssignedAssumption)
+		const bool conflictAtAssumptionLevel = m_DecLevel <= m_DecLevelOfLastAssignedAssumption;
+		if (!conflictAtAssumptionLevel && ncbBtLevel < m_DecLevelOfLastAssignedAssumption)
 		{
 			// We don't want to backtrack lower than the assumptions to prevent assumption re-propagation
 			ncbBtLevel = m_DecLevelOfLastAssignedAssumption;
@@ -1312,8 +1313,8 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		}
 
 		// Determine how to backtrack 		
-		const bool isChronoBt = m_EarliestFalsifiedAssump != BadULit || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
-		const auto btLevel = isChronoBt ? (m_EarliestFalsifiedAssump != BadULit || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
+		const bool isChronoBt = m_EarliestFalsifiedAssump != BadULit || conflictAtAssumptionLevel || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
+		const auto btLevel = isChronoBt ? (m_EarliestFalsifiedAssump != BadULit || conflictAtAssumptionLevel || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
 		Backtrack(btLevel, false, reuseTrail);
 		Assign(m_FlippedLit = cls[0], cls.size() >= 2 ? assertingClsInd : BadClsInd, cls.size() == 1 ? BadULit : cls[1], cls.size() == 1 ? 0 : GetAssignedDecLevel(cls[1]));
 		assert(NV(2) || P("***** Flipped former UIP to " + SLit(cls[0]) + "\n"));

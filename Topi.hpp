@@ -2386,6 +2386,9 @@ protected:
 		TUV m_DecLevelOfLastAssignedAssumption = 0;
 		// This function is called at an early stage of every Solve to set up assumption handling
 		void HandleAssumptions(const span<TLit> userAssumps);
+		// This is an auxiliary function to be called if BCp accidentally backtracked beyond the assumptions
+		void HandleAssumptionsIfBacktrackedBeyondThem();
+		void AssignAssumptions(size_t firstUnassignedAssumpInd);
 
 		inline bool IsAssump(TULit l) const { return IsAssumpVar(GetVar(l)); }
 		inline bool IsAssumpVar(TUVar v) const { return m_AssignmentInfo[v].m_IsAssump; }
