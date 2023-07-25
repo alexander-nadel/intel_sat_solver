@@ -614,7 +614,9 @@ bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 		m_LatestAssumpUnsatCoreSolveInvocation = m_Stat.m_SolveInvs;
 	}
 
-	return m_UserAssumps[assumpInd] != 0 && IsVisited(E2I(m_UserAssumps[assumpInd]));
+	const bool nonDuplicatedAndVisited = m_UserAssumps[assumpInd] != 0 && IsVisited(E2I(m_UserAssumps[assumpInd]));
+	const bool if0DecLevelThenFalsified = m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs || GetAssignedDecLevel(m_SelfContrOrGloballyUnsatAssump) != 0 || IsFalsified(E2I(m_UserAssumps[assumpInd]));
+	return nonDuplicatedAndVisited && if0DecLevelThenFalsified;
 }
 
 template <typename TLit, typename TUInd, bool Compress>
@@ -645,8 +647,18 @@ void CTopi<TLit, TUInd, Compress>::AssignAssumptions(size_t firstUnassignedAssum
 
 					if (m_EarliestFalsifiedAssump != BadULit)
 					{
-						SetStatus(TToporStatus::STATUS_UNSAT, "Falsified assumption discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
-						return;
+						if (IsAssumpFalsifiedGivenVar(GetVar(m_EarliestFalsifiedAssump)))
+						{
+							SetStatus(TToporStatus::STATUS_UNSAT, "Falsified assumption discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
+							return;
+						}			
+						else
+						{
+							// BCP backtracked
+							size_t newFirstUnassignedAssumpInd = FindFirstUnassignedAssumpIndex(firstUnassignedAssumpInd + assumpLitI + 1);
+							AssignAssumptions(newFirstUnassignedAssumpInd);
+							return;
+						}
 					}
 
 					if (!IsAssigned(assumpLit))
@@ -665,15 +677,12 @@ void CTopi<TLit, TUInd, Compress>::AssignAssumptions(size_t firstUnassignedAssum
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit, TUInd, Compress>::HandleAssumptionsIfBacktrackedBeyondThem()
+size_t CTopi<TLit, TUInd, Compress>::FindFirstUnassignedAssumpIndex(size_t indexBeyondHandledAssumps)
 {
-	assert(m_DecLevel < m_DecLevelOfLastAssignedAssumption);
-
-	// Find the first unassigned assumption
-	assert(m_Assumps.cap() > 0);
-	size_t firstUnassignedAssumpInd = m_Assumps.cap();	
+	assert(indexBeyondHandledAssumps <= m_Assumps.cap());
+	auto firstUnassignedAssumpInd = indexBeyondHandledAssumps;
 	TUVar prevDecVar = m_DecLevel == 0 ? BadUVar : GetDecVar(m_DecLevel);
-	for (size_t assumpI = m_Assumps.cap() - 1; assumpI != (size_t)-1 && GetVar(m_Assumps[assumpI]) != prevDecVar; --assumpI)
+	for (size_t assumpI = indexBeyondHandledAssumps - 1; assumpI != (size_t)-1 && GetVar(m_Assumps[assumpI]) != prevDecVar; --assumpI)
 	{
 		const TULit lAssump = m_Assumps[assumpI];
 		if (!IsAssigned(lAssump))
@@ -681,14 +690,24 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptionsIfBacktrackedBeyondThem()
 			firstUnassignedAssumpInd = assumpI;
 		}
 	}
+	return firstUnassignedAssumpInd;
+}
 
+template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::HandleAssumptionsIfBacktrackedBeyondThem()
+{
+	assert(m_DecLevel < m_DecLevelOfLastAssignedAssumption);	
+	assert(m_Assumps.cap() > 0);
+	size_t firstUnassignedAssumpInd = FindFirstUnassignedAssumpIndex(m_Assumps.cap());
 	AssignAssumptions(firstUnassignedAssumpInd);
 }
 
 template <typename TLit, typename TUInd, bool Compress>
 void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssumps)
 {
-	m_UserAssumps = userAssumps;
+	m_UserAssumps.assign(userAssumps.begin(), userAssumps.end());
+	
+	assert(NV(1) || P("Call " + to_string(m_Stat.m_SolveInvs) + "; User assumptions: " + SUserLits(userAssumps) + "\n"));
 
 	m_DecLevelOfLastAssignedAssumption = 0;
 
@@ -707,6 +726,8 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 			return E2I(userLit);
 		});
 	}
+
+	assert(NV(1) || P("Call " + to_string(m_Stat.m_SolveInvs) + "; Intr assumptions: " + SLits(m_Assumps.get_span_cap()) + "\n"));
 
 	// Remove the trailing zero (if any)
 	if (m_Assumps[m_Assumps.cap() - 1] == BadULit)
@@ -741,6 +762,7 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 			if (IsFalsified(lAssump))
 			{
 				m_SelfContrOrGloballyUnsatAssump = lAssump;
+				assert(NV(1) || P("The external assumption " + to_string(*find_if(m_UserAssumps.begin(), m_UserAssumps.end(), [&](TLit l) { return E2I(l) == lAssump; })) + " is falsified at level 0\n"));
 				m_SelfContrOrGloballyUnsatAssumpSolveInv = m_Stat.m_SolveInvs;
 				SetStatus(TToporStatus::STATUS_UNSAT, "An assumption is falsified at decision level 0");
 				return;

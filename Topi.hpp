@@ -2386,15 +2386,18 @@ protected:
 		TUV m_DecLevelOfLastAssignedAssumption = 0;
 		// This function is called at an early stage of every Solve to set up assumption handling
 		void HandleAssumptions(const span<TLit> userAssumps);
-		// This is an auxiliary function to be called if BCp accidentally backtracked beyond the assumptions
+		// This is an auxiliary function to be called if BCP accidentally backtracked beyond the assumptions
 		void HandleAssumptionsIfBacktrackedBeyondThem();
+		// Find first unassigned assumption
+		size_t FindFirstUnassignedAssumpIndex(size_t indexBeyondHandledAssumps);
+		// Assign assumptions starting from firstUnassignedAssumpInd
 		void AssignAssumptions(size_t firstUnassignedAssumpInd);
 
 		inline bool IsAssump(TULit l) const { return IsAssumpVar(GetVar(l)); }
 		inline bool IsAssumpVar(TUVar v) const { return m_AssignmentInfo[v].m_IsAssump; }
 		inline bool IsAssumpFalsifiedGivenVar(TUVar v) const { assert(IsAssumpVar(v)); return IsFalsified(GetLit(v, false)) != m_AssignmentInfo[v].m_IsAssumpNegated; }
 		inline TULit GetAssumpLitForVar(TUVar v) const { assert(IsAssumpVar(v)); return GetLit(v, m_AssignmentInfo[v].m_IsAssumpNegated); }
-		inline bool IsSatisfiedAssump(TUVar v) const { return IsAssumpVar(v) && IsSatisfied(GetAssumpLitForVar(v)); }
+		inline bool IsSatisfiedAssump(TUVar v) const { return IsAssumpVar(v) && IsSatisfied(GetAssumpLitForVar(v)); }		
 
 		// Assumption-UNSAT-core-related
 		// 
@@ -2407,7 +2410,7 @@ protected:
 		// The Solve invocation corresponding to the latest m_EarliestFalsifiedAssump for assumption-UNSAT-core
 		uint64_t m_LatestEarliestFalsifiedAssumpSolveInv = 0;
 		// The latest user assumptions
-		span<TLit> m_UserAssumps;
+		vector<TLit> m_UserAssumps;
 		// The latest invocation of Solve, after which an assumption UNSAT core was requested and extracted
 		uint64_t m_LatestAssumpUnsatCoreSolveInvocation = numeric_limits<uint64_t>::max();
 		inline void AssumpUnsatCoreCleanUpIfRequired() { if (m_Stat.m_SolveInvs == m_LatestAssumpUnsatCoreSolveInvocation) { CleanVisited(); } }
