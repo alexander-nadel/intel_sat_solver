@@ -647,7 +647,7 @@ void CTopi<TLit, TUInd, Compress>::AssignAssumptions(size_t firstUnassignedAssum
 
 					if (m_EarliestFalsifiedAssump != BadULit)
 					{
-						if (IsAssumpFalsifiedGivenVar(GetVar(m_EarliestFalsifiedAssump)))
+						if (IsAssigned(m_EarliestFalsifiedAssump) && IsAssumpFalsifiedGivenVar(GetVar(m_EarliestFalsifiedAssump)))
 						{
 							SetStatus(TToporStatus::STATUS_UNSAT, "Falsified assumption discovered after setting and propagating an assumption at decision level " + to_string(m_DecLevel));
 							return;
