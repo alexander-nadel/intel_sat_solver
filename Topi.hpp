@@ -1724,13 +1724,11 @@ protected:
 			{
 				if (unlikely(clsInd == m_FirstLearntClsInd))
 				{					
-					assert(ClsGetIsLearnt(clsInd));
 					m_FirstLearntClsInd = ClsEnd(clsInd);									
 					while (m_FirstLearntClsInd < m_BNext && ClsChunkDeleted(m_FirstLearntClsInd))
 					{
 						m_FirstLearntClsInd = ClsEnd(m_FirstLearntClsInd);
 					}
-					assert(m_FirstLearntClsInd == m_BNext || ClsGetIsLearnt(clsInd));
 					
 					// Thought the following code a bug fix, but it only deteriorated the performance, so I brought back the old code
 					// The code is not really necessary fopr correctness, since the solver never assumes m_FirstLearntClsInd *must* be learnt
