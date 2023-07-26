@@ -1262,7 +1262,8 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		auto [cls, assertingClsInd] = LearnAndUpdateHeuristics(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed);
 		//assert(m_ParamVerbosityLevel <= 2 || P("***** Learnt clause " + SLits(cls) + "\n"));
 		if (unlikely(IsUnrecoverable())) return;
-		if (m_EarliestFalsifiedAssump != BadULit) m_FlippedLit = BadULit;
+		const bool conflictAtAssumptionLevel = m_DecLevel <= m_DecLevelOfLastAssignedAssumption;
+		if (m_EarliestFalsifiedAssump != BadULit || conflictAtAssumptionLevel) m_FlippedLit = BadULit;
 		auto [additionalCls, additionalAssertingClsInd] = RecordFlipped(contradictionInfo, clsBeforeAllUipOrEmptyIfAllUipFailed.empty() ? cls : clsBeforeAllUipOrEmptyIfAllUipFailed);
 		if (unlikely(IsUnrecoverable())) return;
 
@@ -1290,7 +1291,7 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		assert(cls.size() <= 2 || GetAssignedDecLevel(cls[1]) >= GetAssignedDecLevel(*GetAssignedLitsHighestDecLevelIt(cls, 2)));
 
 		TUV ncbBtLevel = cls.size() > 1 ? GetAssignedDecLevel(cls[1]) : 0;
-		const bool conflictAtAssumptionLevel = m_DecLevel <= m_DecLevelOfLastAssignedAssumption;
+		
 		if (!conflictAtAssumptionLevel && ncbBtLevel < m_DecLevelOfLastAssignedAssumption)
 		{
 			// We don't want to backtrack lower than the assumptions to prevent assumption re-propagation
