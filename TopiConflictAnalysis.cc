@@ -555,7 +555,7 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 	const TUV vDecLevel = GetAssignedDecLevelVar(v);
 	const TUVar vDecVar = GetDecVar(vDecLevel);
 	const bool isAssumpLevel = IsAssumpVar(vDecVar);
-	for (; varsToVisitCurrDecLevel != 1 || (isAssumpLevel && !IsSatisfiedAssump(v)); v = m_VarInfo[v].m_TrailPrev)
+	for (; varsToVisitCurrDecLevel != 1 || (isAssumpLevel && !(IsSatisfiedAssump(v) && m_AssignmentInfo[v].m_Visit)); v = m_VarInfo[v].m_TrailPrev)	
 	{
 		auto& ai = m_AssignmentInfo[v];
 		auto& vi = m_VarInfo[v];
