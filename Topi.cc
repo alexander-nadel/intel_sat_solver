@@ -568,6 +568,11 @@ void CTopi<TLit, TUInd, Compress>::AddUserClause(const span<TLit> c)
 template <typename TLit, typename TUInd, bool Compress>
 bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 {
+	if (m_Status == TToporStatus::STATUS_CONTRADICTORY)
+	{
+		return false;
+	}
+
 	if (m_Stat.m_SolveInvs == 0 || m_Status != TToporStatus::STATUS_UNSAT || assumpInd >= m_UserAssumps.size())
 	{
 		SetStatus(TToporStatus::STATUS_ASSUMPTION_REQUIRED_ERROR, m_Stat.m_SolveInvs == 0 ? "No Solve invocations so far" : m_Status != TToporStatus::STATUS_UNSAT ? "The latest Solve didn't return TToporStatus::STATUS_UNSAT" : "The assumption ID is beyond the number of assumptions in the latest Solve invocation");
