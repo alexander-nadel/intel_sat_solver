@@ -1136,8 +1136,9 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		ConflictAnalysisLoop(contradictionInfo, m_ParamReuseTrail);
 		if (unlikely(IsUnrecoverable())) return trv = StatusToRetVal();
 
-		if (!contradictionInfo.IsContradiction() && m_EarliestFalsifiedAssump == BadULit && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
+		if (!contradictionInfo.IsContradiction() && (m_EarliestFalsifiedAssump == BadULit || !IsAssigned(m_EarliestFalsifiedAssump)) && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
 		{
+			m_EarliestFalsifiedAssump = BadULit;
 			HandleAssumptionsIfBacktrackedBeyondThem();
 		}
 

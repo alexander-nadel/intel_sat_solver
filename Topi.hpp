@@ -225,7 +225,7 @@ namespace Topor
 		constexpr uint8_t InitEntriesPerWL() { return 4 >= TWatchInfo::BinsInLongBitCeil ? 4 : TWatchInfo::BinsInLongBitCeil; };
 		CTopiParam<uint8_t> m_ParamInitEntriesPerWL = { m_Params, "/bcp/init_entries_per_wl", "BCP: the number of initial entries in a watch list", InitEntriesPerWL(), TWatchInfo::BinsInLongBitCeil };
 		CTopiParam<uint8_t> m_ParamBCPWLChoice = { m_Params, "/bcp/wl_choice", "User clause processing: how to choose the watches -- 0: prefer shorter WL; 1: prefer longer WL; 2: disregard WL length", {0, 2, 0, 1, 0, 0, 1, 0, 0}, 0, 2 };
-		CTopiParam<uint8_t> m_ParamExistingBinWLStrat = { m_Params, "/bcp/existing_bin_wl_start", "BCP: what to do about duplicate binary clauses -- 0: nothing; 1: boost their VSIDS score; 2: add another copy to the watches", 1, 0, 2 };
+		CTopiParam<uint8_t> m_ParamExistingBinWLStrat = { m_Params, "/bcp/existing_bin_wl_start", "BCP: what to do about duplicate binary clauses -- 0: nothing; 1: boost their VSIDS score; 2: add another copy to the watches", {1, 1, 1, 1, 2, 1, 1, 1, 1}, 0, 2 };
 		CTopiParam<double> m_ParamBinWLScoreBoostFactor = { m_Params, "/bcp/bin_wl_start_score_boost_factor", "BCP: if /bcp/existing_bin_wl_start=1, what's the factor for boosting the scores", {1., 1., 1., 1., 1., 1., 1., 0.5, 1.}, numeric_limits<double>::epsilon() };
 		CTopiParam<uint8_t> m_ParamBestContradictionStrat = { m_Params, "/bcp/best_contradiction_strat", "BCP's best contradiction strategy: 0: size; 1: glue; 2: first; 3: last", {0, 0, 0, 0, 0, 0, 0, 3, 0}, 0, 3 };
 
