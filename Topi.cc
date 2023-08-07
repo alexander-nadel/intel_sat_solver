@@ -620,7 +620,7 @@ bool CTopi<TLit, TUInd, Compress>::IsAssumptionRequired(size_t assumpInd)
 	}
 
 	const bool nonDuplicatedAndVisited = m_UserAssumps[assumpInd] != 0 && IsVisited(E2I(m_UserAssumps[assumpInd]));
-	const bool if0DecLevelThenFalsified = m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs || GetAssignedDecLevel(m_SelfContrOrGloballyUnsatAssump) != 0 || IsFalsified(E2I(m_UserAssumps[assumpInd]));
+	const bool if0DecLevelThenFalsified = m_LatestEarliestFalsifiedAssumpSolveInv == m_Stat.m_SolveInvs || !IsAssigned(m_SelfContrOrGloballyUnsatAssump) || GetAssignedDecLevel(m_SelfContrOrGloballyUnsatAssump) != 0 || IsFalsified(E2I(m_UserAssumps[assumpInd]));
 	return nonDuplicatedAndVisited && if0DecLevelThenFalsified;
 }
 
