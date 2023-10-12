@@ -859,6 +859,6 @@ bool CTopi<TLit, TUInd, Compress>::ProcessDelayedImplication(TULit diL, TULit ot
 	return false;
 }
 
-template class CTopi<int32_t, uint32_t, false>;
-template class CTopi<int32_t, uint64_t, false>;
-template class CTopi<int32_t, uint64_t, true>;
+template class Topor::CTopi<int32_t, uint32_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, true>;
