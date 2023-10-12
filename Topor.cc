@@ -188,6 +188,6 @@ namespace Topor
 	}
 }
 
-template class CTopor<int32_t, uint32_t, false>;
-template class CTopor<int32_t, uint64_t, false>;
-template class CTopor<int32_t, uint64_t, true>;
+template class Topor::CTopor<int32_t, uint32_t, false>;
+template class Topor::CTopor<int32_t, uint64_t, false>;
+template class Topor::CTopor<int32_t, uint64_t, true>;

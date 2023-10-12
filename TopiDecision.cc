@@ -175,6 +175,6 @@ void CTopi<TLit,TUInd,Compress>::UpdateScoreVar(TUVar v, double mult)
 	}
 }
 
-template class CTopi<int32_t, uint32_t, false>;
-template class CTopi<int32_t, uint64_t, false>;
-template class CTopi<int32_t, uint64_t, true>;
+template class Topor::CTopi<int32_t, uint32_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, true>;

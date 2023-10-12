@@ -58,6 +58,6 @@ void CTopi<TLit,TUInd,Compress>::Backtrack(TLit decLevelL, bool isBCPBacktrack, 
 	assert(NV(2) || !m_ParamReuseTrail || P(SReuseTrail()) + "\n");
 }
 
-template class CTopi<int32_t, uint32_t, false>;
-template class CTopi<int32_t, uint64_t, false>;
-template class CTopi<int32_t, uint64_t, true>;
+template class Topor::CTopi<int32_t, uint32_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, true>;

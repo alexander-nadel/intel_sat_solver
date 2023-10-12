@@ -202,6 +202,6 @@ double CTopi<TLit,TUInd,Compress>::RestartLubySequence(double y, uint64_t x)
 	return pow(y, seq);
 }
 
-template class CTopi<int32_t, uint32_t, false>;
-template class CTopi<int32_t, uint64_t, false>;
-template class CTopi<int32_t, uint64_t, true>;
+template class Topor::CTopi<int32_t, uint32_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, false>;
+template class Topor::CTopi<int32_t, uint64_t, true>;
