@@ -833,6 +833,44 @@ int main(int argc, char** argv)
 	pair<double, bool> nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
 	uint64_t nextSolveConfThr = numeric_limits<uint64_t>::max();
 	TLit varsInPCnf = 0;
+	
+	auto Solve = [&](vector<TLit>* assumpsPtr)
+	{
+		vector<TLit> assumpsEmpty;
+		ret = ToporSolve(assumpsPtr ? *assumpsPtr : assumpsEmpty, nextSolveToInSecIsCpuTime, nextSolveConfThr);
+		nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
+		nextSolveConfThr = numeric_limits<uint64_t>::max();
+
+		retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
+			topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
+
+		if (verifyModel && retValBasedOnLatestSolve == 10)
+		{
+			if (VerifyModel(assumpsPtr) == BadRetVal) return BadRetVal;
+		}
+
+		if (verifyUcore && retValBasedOnLatestSolve == 20)
+		{
+			vector<TLit> ucAssumps;
+			for (unsigned i = 0; i < assumpsPtr->size() && (*assumpsPtr)[i] != 0; ++i)
+			{
+				cout << "Assumption #" << to_string(i) << " -- " << (*assumpsPtr)[i] << " : " << ToporIsAssumptionRequired(i) << endl;
+				if (ToporIsAssumptionRequired(i))
+				{
+					ucAssumps.emplace_back((*assumpsPtr)[i]);
+				}
+			}
+			ret = ToporSolve(ucAssumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
+			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
+				topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
+			if (retValBasedOnLatestSolve != 20)
+			{
+				cout << "ret == " << to_string(retValBasedOnLatestSolve) << ": UNSAT CORE BUG!!!!!\n";
+				return BadRetVal;
+			}
+		}
+		return retValBasedOnLatestSolve;
+	};
 
 	while (ReadLine(f, line, maxSz) != nullptr)
 	{
@@ -1254,40 +1292,10 @@ int main(int argc, char** argv)
 				return BadRetVal;
 			}
 
-			ret = ToporSolve(assumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
-			nextSolveToInSecIsCpuTime = make_pair(numeric_limits<double>::max(), false);
-			nextSolveConfThr = numeric_limits<uint64_t>::max();
-
-			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
-				topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
-
-			if (verifyModel && retValBasedOnLatestSolve == 10)
+			if (Solve(&assumps) == BadRetVal)
 			{
-				if (VerifyModel(&assumps) == BadRetVal) return BadRetVal;
+				return BadRetVal;
 			}
-
-			if (verifyUcore && retValBasedOnLatestSolve == 20)
-			{
-				vector<TLit> ucAssumps;
-				for (unsigned i = 0; i < assumps.size() && assumps[i] != 0; ++i)
-				{
-					cout << "Assumption #" << to_string(i) << " -- " << assumps[i] << " : " << ToporIsAssumptionRequired(i) << endl;
-					if (ToporIsAssumptionRequired(i))
-					{
-						ucAssumps.emplace_back(assumps[i]);
-					}
-				}
-				ret = ToporSolve(ucAssumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
-				retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
-					topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
-				if (retValBasedOnLatestSolve != 20)
-				{
-					cout << "ret == " << to_string(retValBasedOnLatestSolve) << ": UNSAT CORE BUG!!!!!\n";
-					return BadRetVal;
-				}
-
-			}
-
 			continue;
 		}
 
@@ -1338,8 +1346,15 @@ int main(int argc, char** argv)
 					if (VerifyModel() == BadRetVal) return BadRetVal;
 				}
 			}
-
 		}
+		else
+		{
+			if (Solve(nullptr) == BadRetVal)
+			{
+				return BadRetVal;
+			}
+		}
+
 	}
 
 	return retValBasedOnLatestSolve;
