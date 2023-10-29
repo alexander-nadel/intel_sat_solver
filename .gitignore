@@ -1,0 +1,9 @@
+*.o
+*.op
+*.od
+*.or
+*.oh
+*.oq
+*.so
+intel_sat_solver_*
+depend.mk
