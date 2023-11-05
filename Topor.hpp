@@ -37,7 +37,7 @@ namespace Topor
 		// However, the span doesn't have to contain a 0.		
 		void AddClause(const std::span<TLit> c);
 		// This version allows the user to provide the clause as an arbitrary number of literals to the function, e.g.,: AddClause(1,-2,3)
-		template<class... T> void AddClause(TLit lit1, T... lits) { std::vector<TLit> v({ lit1, lits... }); return AddClause(v); }
+		template<class... T> void AddClause(TLit lit1, T... lits) { std::array v = { lit1, lits... }; return AddClause(v); }
 		// This version allows the user to provide the clause as follows: AddClause({1,-2,3})
 		void AddClause(std::initializer_list<TLit> lits) { std::vector<TLit> v(lits); return AddClause(v); }
 		// Solve, given the added clauses and the following optional information, relevant only for the current invocation:
