@@ -943,6 +943,11 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 			PrintDebugModel(trv);
 		}
 
+		if (m_DumpFile)
+		{
+			(*m_DumpFile) << "c " << trv << endl;
+		}
+
 		m_IsSolveOngoing = false;
 
 		if (restoreParamsOnExit)
@@ -1235,6 +1240,14 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 template <typename TLit, typename TUInd, bool Compress>
 Topor::TToporLitVal CTopi<TLit, TUInd, Compress>::GetValue(TLit l) const
 {
+	// This is in order not to crash when the user asks for a value beyond m_MaxUserVar, 
+	// which can legally happen (e.g., consider the input {4 0} {4 5 6 7 0})
+
+	if (ExternalLit2ExternalVar(l) > m_Stat.m_MaxUserVar)
+	{
+		return TToporLitVal::VAL_DONT_CARE;
+	}
+
 	const TULit litInternal = E2I(l);
 	assert(litInternal < GetNextLit());
 

@@ -881,11 +881,47 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 
 	assert(NV(1) || P("Removed globally satisfied literals from binary\n"));
 
+	auto HandleBinaryParents = [&]()
+	{
+		if (m_DecLevel > 0)
+		{
+			for (TUVar v = GetTrailNextVar(m_TrailLastVarPerDecLevel[0]); v != BadUVar; v = GetTrailNextVar(v))
+			{
+				assert(m_AssignmentInfo[v].m_IsAssigned);
+				if (m_AssignmentInfo[v].m_IsAssignedInBinary)
+				{
+					m_VarInfo[v].m_BinOtherLit = RetSiftedLit(m_VarInfo[v].m_BinOtherLit);
+				}
+				else if (m_VarInfo[v].m_ParentClsInd != BadClsInd && ClsChunkDeleted(m_VarInfo[v].m_ParentClsInd))
+				{
+					m_AssignmentInfo[v].m_IsAssignedInBinary = true;
+					assert(ClsGetSize(m_VarInfo[v].m_ParentClsInd) >= 3);
+					const auto cls = ConstClsSpan(m_VarInfo[v].m_ParentClsInd, 3);
+					assert(NV(2) || P("Var; parent cls: " + to_string(v) + " " + HexStr(m_VarInfo[v].m_ParentClsInd) + ": " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
+					if constexpr (Compress)
+					{
+						assert(cls[0] == BadULit);
+						assert(GetVar(cls[1]) == v || GetVar(cls[2]) == v);
+						m_VarInfo[v].m_BinOtherLit = GetVar(cls[1]) == v ? cls[2] : cls[1];
+					}
+					else
+					{
+						assert(cls[1] == BadULit);
+						assert(GetVar(cls[0]) == v || GetVar(cls[2]) == v);
+						m_VarInfo[v].m_BinOtherLit = GetVar(cls[0]) == v ? cls[2] : cls[0];
+					}
+				}
+			}
+		}
+	};
+	
 	// Now we want to sift the variable indices (to the removed-by-now globally assigned variables), if required
 	// One globally assigned variable will remain in any case
 
 	if (!siftVarIndices)
 	{
+		// Still need to HandleBinaryParents, since some non-binary parents could have been turned binary
+		HandleBinaryParents();
 		assert(NV(1) || P("No need to sift indices, exiting...\n"));
 		return;
 	}
@@ -976,36 +1012,7 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	// Handle the trail
 	m_AssignmentInfo[globallySatifiedVarLowestIndex].m_IsAssignedInBinary = false;
 	m_VarInfo[globallySatifiedVarLowestIndex].m_ParentClsInd = BadClsInd;
-	if (m_DecLevel > 0)
-	{
-		for (TUVar v = GetTrailNextVar(m_TrailLastVarPerDecLevel[0]); v != BadUVar; v = GetTrailNextVar(v))
-		{
-			assert(m_AssignmentInfo[v].m_IsAssigned);
-			if (m_AssignmentInfo[v].m_IsAssignedInBinary)
-			{
-				m_VarInfo[v].m_BinOtherLit = RetSiftedLit(m_VarInfo[v].m_BinOtherLit);
-			}
-			else if (m_VarInfo[v].m_ParentClsInd != BadClsInd && ClsChunkDeleted(m_VarInfo[v].m_ParentClsInd))
-			{
-				m_AssignmentInfo[v].m_IsAssignedInBinary = true;
-				assert(ClsGetSize(m_VarInfo[v].m_ParentClsInd) >= 3);
-				const auto cls = ConstClsSpan(m_VarInfo[v].m_ParentClsInd, 3);
-				assert(NV(2) || P("Var; parent cls: " + to_string(v) + " " + HexStr(m_VarInfo[v].m_ParentClsInd) + ": " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
-				if constexpr (Compress)
-				{
-					assert(cls[0] == BadULit);
-					assert(GetVar(cls[1]) == v || GetVar(cls[2]) == v);
-					m_VarInfo[v].m_BinOtherLit = GetVar(cls[1]) == v ? cls[2] : cls[1];
-				}
-				else
-				{
-					assert(cls[1] == BadULit);
-					assert(GetVar(cls[0]) == v || GetVar(cls[2]) == v);
-					m_VarInfo[v].m_BinOtherLit = GetVar(cls[0]) == v ? cls[2] : cls[0];
-				}
-			}
-		}
-	}
+	HandleBinaryParents();
 
 	// Handle the assumptions
 	if (!m_Assumps.cap() == 0)
