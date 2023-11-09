@@ -545,7 +545,7 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 
 	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd, false);
 
-	bool contradictingIsLearnt = IsOnTheFlySubsumptionContradictingOn();
+	
 	// Used to maintain all the heuristics working if the contradicting clause manages to stay the 1UIP
 	TUVar trailEndBeforeOnTheFlySubsumption = m_TrailEnd;
 
@@ -555,6 +555,9 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 	const TUV vDecLevel = GetAssignedDecLevelVar(v);
 	const TUVar vDecVar = GetDecVar(vDecLevel);
 	const bool isAssumpLevel = IsAssumpVar(vDecVar);
+	// Removing a subsumed contradicting clause at assumption level might result in a correctness problem, 
+	// because the algorithm doesn't stop at first UIP, so it won't record the subsuming clause
+	bool contradictingIsLearnt = IsOnTheFlySubsumptionContradictingOn() && !isAssumpLevel;
 	for (; varsToVisitCurrDecLevel != 1 || (isAssumpLevel && !(IsSatisfiedAssump(v) && m_AssignmentInfo[v].m_Visit)); v = m_VarInfo[v].m_TrailPrev)	
 	{
 		auto& ai = m_AssignmentInfo[v];
