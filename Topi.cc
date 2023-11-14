@@ -852,6 +852,23 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::UpdateI2EMapIfRequired()
+{
+	if (UseI2ELitMap())
+	{
+		for (TLit externalVar = 1; externalVar <= m_Stat.m_MaxUserVar; ++externalVar)
+		{
+			assert(externalVar < (TLit)m_E2ILitMap.cap() && GetVar(m_E2ILitMap[externalVar]) < m_I2ELitMap.cap());
+			const auto iLit = m_E2ILitMap[externalVar];
+			if (iLit != BadULit)
+			{
+				assert(IsPos(iLit) || IsGloballyAssigned(iLit));
+				m_I2ELitMap[GetVar(iLit)] = IsAssigned(iLit) && IsGloballyAssigned(iLit) && IsAssignedNegated(iLit) ? -externalVar : externalVar;
+			}			
+		}
+	}
+}
+template <typename TLit, typename TUInd, bool Compress>
 TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
 {
 	if (m_DumpFile)
@@ -1028,20 +1045,10 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 	RestartInit();
 	DecisionInit();
 	BacktrackingInit();
+	UpdateI2EMapIfRequired();
 
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
-
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
-
-	if (UseI2ELitMap())
-	{
-		for (TLit externalVar = 1; externalVar <= m_Stat.m_MaxUserVar; ++externalVar)
-		{
-			assert(externalVar < (TLit)m_E2ILitMap.cap() && GetVar(m_E2ILitMap[externalVar]) < m_I2ELitMap.cap());
-			const auto iLit = m_E2ILitMap[externalVar];
-			m_I2ELitMap[GetVar(iLit)] = IsAssignedNegated(iLit) ? -externalVar : externalVar;
-		}
-	}
 
 	TContradictionInfo pi = BCP();
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();

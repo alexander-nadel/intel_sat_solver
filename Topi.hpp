@@ -370,7 +370,7 @@ namespace Topor
 		CDynArray<TLit> m_I2ELitMap;
 		inline TLit GetExternalLit(TULit iLit) { return IsNeg(iLit) ? -m_I2ELitMap[GetVar(iLit)] : m_I2ELitMap[GetVar(iLit)]; }
 		bool UseI2ELitMap() const { return m_ParamVerifyDebugModelInvocation != 0 || IsCbLearntOrDrat() || M_ReportUnitCls != nullptr; }
-		
+		void UpdateI2EMapIfRequired();		
 		static constexpr TLit ExternalLit2ExternalVar(TLit l) { return l > 0 ? l : -l; }
 		inline TULit E2I(TLit l) const
 		{
@@ -378,6 +378,8 @@ namespace Topor
 			const TULit internalL = m_E2ILitMap[externalV];
 			return l < 0 ? Negate(internalL) : internalL;
 		}
+
+		bool AssertI2EE2IMatch();
 	
 		// Used to make sure tautologies are discovered and duplicates are removed in new clauses
 		class CHandleNewCls;
@@ -2206,6 +2208,11 @@ protected:
 		{
 			const TUVar v = GetVar(l);
 			return m_AssignmentInfo[v].m_IsAssigned && m_AssignmentInfo[v].m_IsNegated ^ IsNeg(l);
+		}
+
+		inline bool IsGloballyAssigned(TULit l) const
+		{
+			return GetAssignedDecLevel(l) == 0;
 		}
 
 		inline bool IsGloballyFalsified(TULit l) const

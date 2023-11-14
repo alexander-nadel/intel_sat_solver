@@ -443,11 +443,6 @@ int main(int argc, char** argv)
 		if (dratName != "")
 		{
 			dratFile.close();
-
-			if (ret == TToporReturnVal::RET_SAT)
-			{
-				remove(dratName.c_str());
-			}
 		}
 		delete topor32;
 		delete topor64;

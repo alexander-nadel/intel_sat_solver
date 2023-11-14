@@ -23,7 +23,7 @@ void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
 	ReserveExactly(m_VisitedVars, GetNextVar(), "m_VisitedVars in ReserveVarAndLitData");
 	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar(), 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
 	if (m_ParamReuseTrail) ReserveExactly(m_ReuseTrail, GetNextVar(), "m_TrailToReuse in ReserveVarAndLitData");
-	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), "m_I2ELitMap in ReserveVarAndLitData");
+	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), 0, "m_I2ELitMap in ReserveVarAndLitData");
 	if (IsCbLearntOrDrat()) ReserveExactly(m_UserCls, GetNextVar(), "m_UserCls in ReserveVarAndLitData");
 	if (m_ParamOnTheFlySubsumptionParentMinGlueToDisable > 0) ReserveExactly(m_CurrClsCounters, GetNextVar(), 0, "m_CurrClsCounters in ReserveVarAndLitData");
 	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, GetNextVar(), 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
@@ -396,6 +396,7 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
+	assert(AssertI2EE2IMatch());
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
@@ -1055,6 +1056,10 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	ReserveVarAndLitData();
 
 	m_Stat.UpdateMaxInternalVar(m_LastExistingVar);
+
+	UpdateI2EMapIfRequired();
+
+	assert(AssertI2EE2IMatch());
 
 	m_VsidsHeap.rebuild();
 
