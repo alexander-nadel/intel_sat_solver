@@ -883,7 +883,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 	assert((m_Stat.m_SolveInvs == 0) == (m_QueryCurr == TQueryType::QUERY_NONE));
 	m_QueryCurr = m_QueryCurr == TQueryType::QUERY_NONE ? TQueryType::QUERY_INIT : confThr <= (uint64_t)m_ParamShortQueryConfThrInv ? TQueryType::QUERY_INC_SHORT : TQueryType::QUERY_INC_NORMAL;
 
-	const bool restoreParamsOnExit = m_QueryCurr == TQueryType::QUERY_INC_SHORT && !m_ShortInvLifetimeParamVals.empty();
+	const bool restoreParamsOnExit = m_QueryCurr == TQueryType::QUERY_INC_SHORT && !m_ShortInvLifetimeParamVals.empty() && !IsUnrecoverable();
 	CTopiParams* paramsToRestore(nullptr);
 
 	TToporReturnVal trv = TToporReturnVal::RET_EXOTIC_ERROR;
@@ -925,11 +925,16 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		cout << m_Params.GetAllParamsCurrValues();
 	}
 
+	m_Stat.NewSolveInvocation(m_QueryCurr == CTopi<TLit, TUInd, Compress>::TQueryType::QUERY_INC_SHORT);
+	if (IsCbLearntOrDrat() && m_Status == TToporStatus::STATUS_CONTRADICTORY)
+	{
+		vector<TULit> emptyCls;
+		NewLearntClsApplyCbLearntDrat(emptyCls);
+	}
+
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
 
 	m_IsSolveOngoing = true;
-
-	m_Stat.NewSolveInvocation(m_QueryCurr == CTopi<TLit, TUInd, Compress>::TQueryType::QUERY_INC_SHORT);
 
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{

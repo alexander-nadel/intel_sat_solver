@@ -105,7 +105,7 @@ static constexpr int BadRetVal = -1;
 using TLit = int32_t;
 
 template <typename TTopor>
-int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, vector<TLit>* varsToPrint = nullptr)
+int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, bool printUcore, const std::span<TLit> assumps = {}, vector<TLit>* varsToPrint = nullptr)
 {
 	CApplyFuncOnExitFromScope<> printStatusExplanation([&]()
 	{
@@ -150,6 +150,19 @@ int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, vect
 		return 10;
 	case Topor::TToporReturnVal::RET_UNSAT:
 		cout << "s UNSATISFIABLE" << endl;
+		if (printUcore)
+		{
+			cout << "v";
+			for (size_t assumpInd = 0; assumpInd < assumps.size(); ++assumpInd)
+			{
+				TLit currAssump = assumps[assumpInd];
+				if (topor.IsAssumptionRequired(assumpInd))
+				{
+					cout << " " << currAssump;
+				}
+			}
+			cout << " 0" << endl;
+		}
 		return 20;
 	case Topor::TToporReturnVal::RET_TIMEOUT_LOCAL:
 		cout << "s TIMEOUT_LOCAL" << endl;
@@ -211,8 +224,9 @@ int main(int argc, char** argv)
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/bin_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a binary DRAT proof\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/text_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a text DRAT proof (if more than one /topor_tool/bin_drat_file and /topor_tool/text_drat_file parameters provided, only the last one is applied, rest are ignored)\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the models for satisfiable invocations?\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the indices of the assumptions in the unsatisfiable core for unsatisfiable invocations (0-indexed)?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the models for satisfiable invocations?\n";
-		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the unsatisfiable cores for unsatisfiable invocations?\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the unsatisfiable cores in terms of assumptions for unsatisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_models_number") << " : unsigned long integer; default = 1" << print_as_color<ansi_color_code::green>("1") << " : " << "the maximal number of models for AllSAT. AllSAT with blocking clauses over /topor_tool/allsat_blocking_variables's variables is invoked if: (1) this parameter is greater than 1; (2) the CNF format is DIMACS without Topor-specific commands; (3) /topor_tool/allsat_blocking_variables is non-empty\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "if /topor_tool/allsat_models_number > 1, specifies the variables which will be used for blocking clauses, sperated by a comma, e.g., 1,4,5,6,7,15.\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables_file_alg") << " : string; default = " << print_as_color<ansi_color_code::green>("3") << " : " << "if /topor_tool/allsat_models_number > 1 and our parameter > 0, read the blocking variables from the first comment line in the file (format: c 1,4,5,6,7,15), where the value means: 1 -- assign lowest internal SAT variables to blocking; 2 -- assign highest internal SAT variables to blocking; >=3 -- assign their own internal SAT variables to blocking \n";
@@ -233,6 +247,7 @@ int main(int argc, char** argv)
 	bool isDratBinary = true;
 	string dratName("");
 	bool printModel = true;
+	bool printUcore = false;
 	bool verifyModel = false;
 	bool verifyUcore = false;
 	unsigned long allsatModels = 0;
@@ -418,9 +433,9 @@ int main(int argc, char** argv)
 		return topor32 ? topor32->GetStatistics().m_SolveInvs : topor64 ? topor64->GetStatistics().m_SolveInvs : toporc->GetStatistics().m_SolveInvs;
 	};
 
-	auto ToporOnFinishedSolving = [&](TToporReturnVal ret, bool printModel, vector<TLit>& varsToPrint)
+	auto ToporOnFinishedSolving = [&](TToporReturnVal ret, bool printModel, bool printUcore, const std::span<TLit> assumps, vector<TLit>& varsToPrint)
 	{
-		return topor32 ? OnFinishingSolving(*topor32, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint) : OnFinishingSolving(*toporc, ret, printModel, varsToPrint.empty() ? nullptr : &varsToPrint);
+		return topor32 ? OnFinishingSolving(*topor32, ret, printModel, printUcore, assumps, varsToPrint.empty() ? nullptr : &varsToPrint) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, printUcore, assumps, varsToPrint.empty() ? nullptr : &varsToPrint) : OnFinishingSolving(*toporc, ret, printModel, printUcore, assumps, varsToPrint.empty() ? nullptr : &varsToPrint);
 	};
 
 	auto ToporIsAssumptionRequired = [&](size_t assumpInd)
@@ -611,6 +626,17 @@ int main(int argc, char** argv)
 						cout << "c /topor_tool/print_model " << paramValStr << endl;
 						string errMsg;
 						printModel = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
+					else if (param == "print_ucore")
+					{
+						cout << "c /topor_tool/print_ucore " << paramValStr << endl;
+						string errMsg;
+						printUcore = ReadBoolParam(errMsg);
 						if (!errMsg.empty())
 						{
 							cout << errMsg;
@@ -837,7 +863,7 @@ int main(int argc, char** argv)
 		nextSolveConfThr = numeric_limits<uint64_t>::max();
 
 		retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
-			topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
+			topor32 ? OnFinishingSolving(*topor32, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty) : OnFinishingSolving(*toporc, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty);
 
 		if (verifyModel && retValBasedOnLatestSolve == 10)
 		{
@@ -857,7 +883,7 @@ int main(int argc, char** argv)
 			}
 			ret = ToporSolve(ucAssumps, nextSolveToInSecIsCpuTime, nextSolveConfThr);
 			retValBasedOnLatestSolve = AllToporsNull() ? BadRetVal :
-				topor32 ? OnFinishingSolving(*topor32, ret, printModel) : topor64 ? OnFinishingSolving(*topor64, ret, printModel) : OnFinishingSolving(*toporc, ret, printModel);
+				topor32 ? OnFinishingSolving(*topor32, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty) : topor64 ? OnFinishingSolving(*topor64, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty) : OnFinishingSolving(*toporc, ret, printModel, printUcore, assumpsPtr ? *assumpsPtr : assumpsEmpty);
 			if (retValBasedOnLatestSolve != 20)
 			{
 				cout << "ret == " << to_string(retValBasedOnLatestSolve) << ": UNSAT CORE BUG!!!!!\n";
@@ -1314,8 +1340,9 @@ int main(int argc, char** argv)
 	{
 		if (allsatModels > 1 && !blockingVars.empty())
 		{
+			vector<TLit> assumpsEmpty;
 			ret = ToporSolve();
-			retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
+			retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, printUcore, assumpsEmpty, blockingVars);
 			if (verifyModel && retValBasedOnLatestSolve == 10)
 			{
 				if (VerifyModel() == BadRetVal) return BadRetVal;
@@ -1335,7 +1362,7 @@ int main(int argc, char** argv)
 				}
 				ToporAddClause(cls);
 				ret = ToporSolve();
-				retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, blockingVars);
+				retValBasedOnLatestSolve = ToporOnFinishedSolving(ret, printModel, printUcore, assumpsEmpty, blockingVars);
 				if (verifyModel && retValBasedOnLatestSolve == 10)
 				{
 					if (VerifyModel() == BadRetVal) return BadRetVal;

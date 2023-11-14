@@ -82,7 +82,7 @@ namespace Topor
 		std::vector<TToporLitVal> GetModel() const;
 		// Must be invoked immediately after a Solve invocation, which returned TToporReturnVal::RET_UNSAT
 		// Is assumption which appeared at assumps[assumpInd] during the latest Solve call, that is, is it part of the UNSAT core
-		// Sets the status to permanent error, if the latest Solve invocation didn't return TToporReturnVal::RET_UNSAT or if assumpInd >= assumps.size()
+		// Sets the status to permanent error, if the latest Solve invocation didn't return TToporReturnVal::RET_UNSAT or if assumpInd >= AssumpsSize()
 		bool IsAssumptionRequired(size_t assumpInd);
 		// Get the decision level of the given literal (which must be assigned!)
 		TLit GetLitDecLevel(TLit l) const;
