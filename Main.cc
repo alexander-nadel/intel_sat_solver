@@ -132,7 +132,7 @@ int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, bool
 			cout << "v";
 			if (!varsToPrint)
 			{
-				for (TLit v = 1; v <= topor.GetStatistics().m_MaxUserVar; ++v)
+				for (TLit v = 1; v <= topor.GetMaxUserVar(); ++v)
 				{
 					PrintVal(v);
 				}
@@ -427,10 +427,10 @@ int main(int argc, char** argv)
 		topor32 ? topor32->AddClause(c) : topor64 ? topor64->AddClause(c) : toporc->AddClause(c);
 	};
 
-	auto ToporGetStatisticsSolveInst = [&]()
+	auto ToporGetSolveInvs = [&]()
 	{
 		assert(!AllToporsNull());
-		return topor32 ? topor32->GetStatistics().m_SolveInvs : topor64 ? topor64->GetStatistics().m_SolveInvs : toporc->GetStatistics().m_SolveInvs;
+		return topor32 ? topor32->GetSolveInvs() : topor64 ? topor64->GetSolveInvs() : toporc->GetSolveInvs();
 	};
 
 	auto ToporOnFinishedSolving = [&](TToporReturnVal ret, bool printModel, bool printUcore, const std::span<TLit> assumps, vector<TLit>& varsToPrint)
@@ -1336,7 +1336,7 @@ int main(int argc, char** argv)
 
 	free(line);
 
-	if (!AllToporsNull() && ToporGetStatisticsSolveInst() == 0)
+	if (!AllToporsNull() && ToporGetSolveInvs() == 0)
 	{
 		if (allsatModels > 1 && !blockingVars.empty())
 		{

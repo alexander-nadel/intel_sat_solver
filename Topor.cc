@@ -93,15 +93,63 @@ TLit CTopor<TLit, TUInd, Compress>::GetLitDecLevel(TLit l) const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-std::vector<TToporLitVal> CTopor<TLit,TUInd,Compress>::GetModel() const
+uint64_t CTopor<TLit, TUInd, Compress>::GetSolveInvs() const
 {
-	return m_Topi->GetModel();
+	return m_Topi->GetSolveInvs();
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-Topor::TToporStatistics<TLit, TUInd> CTopor<TLit, TUInd, Compress>::GetStatistics() const
+TLit CTopor<TLit, TUInd, Compress>::GetMaxUserVar() const
 {
-	return m_Topi->GetStatistics();
+	return m_Topi->GetMaxUserVar();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+std::string CTopor<TLit, TUInd, Compress>::GetStatStrShort(bool forcePrintingHead)
+{
+	return m_Topi->GetStatStrShort(forcePrintingHead);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetConflictsNumber() const
+{
+	return m_Topi->GetConflictsNumber();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetActiveClss() const
+{
+	return m_Topi->GetActiveClss();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetBacktracks() const
+{
+	return m_Topi->GetBacktracks();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetAssumpReuseBacktrackLevelsSaved() const
+{
+	return m_Topi->GetAssumpReuseBacktrackLevelsSaved();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+TLit CTopor<TLit, TUInd, Compress>::GetMaxInternalVar() const
+{
+	return m_Topi->GetMaxInternalVar();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetActiveLongLearntClss() const
+{
+	return m_Topi->GetActiveLongLearntClss();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+std::vector<TToporLitVal> CTopor<TLit,TUInd,Compress>::GetModel() const
+{
+	return m_Topi->GetModel();
 }
 
 template <typename TLit, typename TUInd, bool Compress>

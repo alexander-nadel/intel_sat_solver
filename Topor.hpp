@@ -86,14 +86,30 @@ namespace Topor
 		bool IsAssumptionRequired(size_t assumpInd);
 		// Get the decision level of the given literal (which must be assigned!)
 		TLit GetLitDecLevel(TLit l) const;
+		// Get the number of Solve invocations
+		uint64_t GetSolveInvs() const;
+		// Get the maximal user-provided variable that wasn't simplified away (since it, e.g., only participated in tautologies)
+		TLit GetMaxUserVar() const;
+		// The maximal internal variable number (can be thought of as the number of active variables in the solver)
+		TLit GetMaxInternalVar() const;
+		// Get a string with some statistics
+		std::string GetStatStrShort(bool forcePrintingHead = false);
+		// Get the number of conflicts so far
+		uint64_t GetConflictsNumber() const;
+		// Get the number of active clauses in the solver (undeleted binary and long clauses both initial & learnt)
+		uint64_t GetActiveClss() const;
+		// Get the number of active long (non-binary) learnt clauses in the solver
+		uint64_t GetActiveLongLearntClss() const;
+		// Get the number of backtracks
+		uint64_t GetBacktracks() const;
+		// The number of backtrack levels, saved by reusing assumptions
+		uint64_t GetAssumpReuseBacktrackLevelsSaved() const;		
 
 		// Is there an error in the solver?
 		bool IsError() const;
 		// Get the explanation of the current status
 		// If IsError() holds, a non-empty explanation is mandatory, otherwise it might be empty (or not)
 		std::string GetStatusExplanation() const;
-		// Get statistics
-		TToporStatistics<TLit, TUInd> GetStatistics() const;
 		// Get the description of the parameters
 		std::string GetParamsDescr() const;		
 

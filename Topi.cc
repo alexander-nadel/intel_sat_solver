@@ -1277,6 +1277,60 @@ TLit CTopi<TLit, TUInd, Compress>::GetLitDecLevel(TLit l) const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetSolveInvs() const
+{
+	return m_Stat.m_SolveInvs;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+TLit CTopi<TLit, TUInd, Compress>::GetMaxUserVar() const
+{
+	return m_Stat.m_MaxUserVar;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+TLit CTopi<TLit, TUInd, Compress>::GetMaxInternalVar() const
+{
+	return (TLit)m_Stat.m_MaxInternalVar;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetActiveLongLearntClss() const
+{
+	return m_Stat.m_ActiveLongLearntClss;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+std::string CTopi<TLit, TUInd, Compress>::GetStatStrShort(bool forcePrintingHead)
+{
+	return m_Stat.StatStrShort(forcePrintingHead);
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetConflictsNumber() const
+{
+	return (uint64_t)m_Stat.m_Conflicts;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetActiveClss() const
+{
+	return (uint64_t)m_Stat.GetActiveClss();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetBacktracks() const
+{
+	return m_Stat.m_Backtracks;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetAssumpReuseBacktrackLevelsSaved() const
+{
+	return m_Stat.m_AssumpReuseBacktrackLevelsSaved;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 vector<Topor::TToporLitVal> CTopi<TLit, TUInd, Compress>::GetModel() const
 {
 	vector<Topor::TToporLitVal> m(m_E2ILitMap.cap());

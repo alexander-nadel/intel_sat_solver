@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <sstream>
+
 enum class ansi_color_code : int {
 	black = 30,
 	red = 31,

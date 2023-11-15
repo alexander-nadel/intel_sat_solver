@@ -13,7 +13,7 @@
 #include <memory>
 #include <tuple>
 
-#include "ToporExternalTypes.hpp"
+#include "TopiStatistics.hpp"
 #include "ToporBitArrayBuffer.hpp"
 #include "ToporDynArray.hpp"
 #include "ToporBitArray.hpp"
@@ -64,6 +64,16 @@ namespace Topor
 		bool IsAssumptionRequired(size_t assumpInd);
 		TToporLitVal GetValue(TLit l) const;
 		TLit GetLitDecLevel(TLit l) const;
+		uint64_t GetSolveInvs() const;
+		TLit GetMaxUserVar() const;
+		TLit GetMaxInternalVar() const;
+		std::string GetStatStrShort(bool forcePrintingHead = false);
+		uint64_t GetConflictsNumber() const;
+		uint64_t GetActiveClss() const;
+		uint64_t GetActiveLongLearntClss() const;
+		uint64_t GetBacktracks() const;
+		uint64_t GetAssumpReuseBacktrackLevelsSaved() const;
+		
 		std::vector<TToporLitVal> GetModel() const;
 		TToporStatistics<TLit, TUInd> GetStatistics() const;		
 		string GetParamsDescr() const;
@@ -3082,8 +3092,10 @@ protected:
 			TCounterType m_Counter;			
 		};
 
-		string GetMemoryLayout() const;		
+		string GetMemoryLayout() const;				
 	};
+
+	std::ostream& operator << (std::ostream& os, const TToporReturnVal& trv);
 
 	inline void swap(CTopi<int32_t, uint64_t, true>::CCompressedCls::CIteratorRef&& ccir1RValue, CTopi<int32_t, uint64_t, true>::CCompressedCls::CIteratorRef&& ccir2RValue)
 	{
