@@ -223,6 +223,7 @@ int main(int argc, char** argv)
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/solver_mode") << " : enum (0, 1, or 2); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "what type of solver to use in terms of clause buffer indexing and compression: 0 -- 32-bit index, uncompressed, 1 -- 64-bit index, uncompressed, 2 -- 64-bit index, bit-array compression \n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/bin_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a binary DRAT proof\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/text_drat_file") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "path to a file to write down a text DRAT proof (if more than one /topor_tool/bin_drat_file and /topor_tool/text_drat_file parameters provided, only the last one is applied, rest are ignored)\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/drat_sort_every_clause") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "sort every clause in DRAT proof (can be helpful for debugging)\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the models for satisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the indices of the assumptions in the unsatisfiable core for unsatisfiable invocations (0-indexed)?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the models for satisfiable invocations?\n";
@@ -246,6 +247,7 @@ int main(int argc, char** argv)
 
 	bool isDratBinary = true;
 	string dratName("");
+	bool dratSortEveryClause = false;
 	bool printModel = true;
 	bool printUcore = false;
 	bool verifyModel = false;
@@ -361,10 +363,10 @@ int main(int argc, char** argv)
 		return topor32 ? topor32->GetStatusExplanation() : topor64 ? topor64->GetStatusExplanation() : toporc->GetStatusExplanation();
 	};
 
-	auto ToporDumpDrat = [&](std::ofstream& openedDratFile, bool isDratBinary)
+	auto ToporDumpDrat = [&](std::ofstream& openedDratFile, bool isDratBinary, bool dratSortEveryClause)
 	{
 		assert(!AllToporsNull());
-		topor32 ? topor32->DumpDrat(openedDratFile, isDratBinary) : topor64 ? topor64->DumpDrat(openedDratFile, isDratBinary) : toporc->DumpDrat(openedDratFile, isDratBinary);
+		topor32 ? topor32->DumpDrat(openedDratFile, isDratBinary, dratSortEveryClause) : topor64 ? topor64->DumpDrat(openedDratFile, isDratBinary, dratSortEveryClause) : toporc->DumpDrat(openedDratFile, isDratBinary, dratSortEveryClause);
 	};
 
 	auto ToporGetLitValue = [&](TLit l)
@@ -621,6 +623,17 @@ int main(int argc, char** argv)
 						isDratBinary = false;
 						cout << "c /topor_tool/text_drat_file " << dratName << endl;
 					}
+					else if (param == "drat_sort_every_clause")
+					{
+						cout << "c /topor_tool/drat_sort_every_clause " << paramValStr << endl;
+						string errMsg;
+						dratSortEveryClause = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
 					else if (param == "print_model")
 					{
 						cout << "c /topor_tool/print_model " << paramValStr << endl;
@@ -773,7 +786,7 @@ int main(int argc, char** argv)
 				cout << "c topor_tool ERROR: couldn't open DRAT file " << dratName << endl;
 				return BadRetVal;
 			}
-			ToporDumpDrat(dratFile, isDratBinary);
+			ToporDumpDrat(dratFile, isDratBinary, dratSortEveryClause);
 		}
 
 		return 0;

@@ -11,9 +11,9 @@ using namespace Topor;
 using namespace std;
 
 template <typename TLit, typename TUInd, bool Compress>
-TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls, bool isLearnt)
+TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls, bool isLearntNotForDeletion, bool isPartOfProof)
 {
-	if (isLearnt && IsCbLearntOrDrat())
+	if (isPartOfProof && IsCbLearntOrDrat())
 	{
 		NewLearntClsApplyCbLearntDrat(cls);
 	}
@@ -24,7 +24,7 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 	{
 		if (m_ParamExistingBinWLStrat == 2 || !WLBinaryWatchExists(cls[0], cls[1]))
 		{
-			m_Stat.NewClause(cls.size(), isLearnt);
+			m_Stat.NewClause(cls.size(), isLearntNotForDeletion);
 			WLAddBinaryWatch(cls[0], cls[1]);
 			if (unlikely(IsUnrecoverable())) return clsStart;
 			WLAddBinaryWatch(cls[1], cls[0]);
@@ -42,7 +42,7 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 	}
 	else if (cls.size() > 2)
 	{
-		m_Stat.NewClause(cls.size(), isLearnt);
+		m_Stat.NewClause(cls.size(), isLearntNotForDeletion);
 		// Long clause		
 
 		WLAddLongWatch(cls[0], cls[1]);
@@ -60,9 +60,9 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 
 		if constexpr (!Compress)
 		{
-			const bool isOversized = isLearnt && cls.size() > ClsLearntMaxSizeWithGlue;
+			const bool isOversized = isLearntNotForDeletion && cls.size() > ClsLearntMaxSizeWithGlue;
 
-			const TUInd newBNext = m_BNext + (TUInd)cls.size() + EClsLitsStartOffset(isLearnt, isOversized);
+			const TUInd newBNext = m_BNext + (TUInd)cls.size() + EClsLitsStartOffset(isLearntNotForDeletion, isOversized);
 
 			if (unlikely(newBNext < m_BNext))
 			{
@@ -83,9 +83,9 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 			// The clause will start at m_BNext; point to it correctly from both watches
 			clsStart = PointFromWatches(m_BNext);
 			// Order of setting the fields is important, since ClsSetSize depends on ClsSetSize and ClsSetGlue depends on both
-			EClsSetIsLearnt(m_BNext, isLearnt);
+			EClsSetIsLearnt(m_BNext, isLearntNotForDeletion);
 			ClsSetSize(m_BNext, (TUV)cls.size());
-			if (isLearnt)
+			if (isLearntNotForDeletion)
 			{
 				ClsSetGlue(m_BNext, GetGlueAndMarkCurrDecLevels(cls));
 				if (unlikely(m_BNext < m_FirstLearntClsInd))
@@ -98,13 +98,13 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 				}
 			}
 			// Copy the clause from the input span
-			memcpy(m_B.get_ptr(m_BNext + EClsLitsStartOffset(isLearnt, isOversized)), &cls[0], cls.size() * sizeof(cls[0]));
+			memcpy(m_B.get_ptr(m_BNext + EClsLitsStartOffset(isLearntNotForDeletion, isOversized)), &cls[0], cls.size() * sizeof(cls[0]));
 			// Update m_BNext
 			m_BNext = newBNext;
 		}
 		else
 		{
-			clsStart = PointFromWatches(BCCompress(cls, isLearnt, isLearnt ? GetGlueAndMarkCurrDecLevels(cls) : 0));
+			clsStart = PointFromWatches(BCCompress(cls, isLearntNotForDeletion, isLearntNotForDeletion ? GetGlueAndMarkCurrDecLevels(cls) : 0));
 		}
 	}
 
@@ -481,7 +481,7 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 	auto contradictingCls = CiGetSpan(contradictionInfo);
 
 	assert(NV(2) || P("************************ Conflict #" + to_string(m_Stat.m_Conflicts) + "\n" + STrail() + "\n" + "Contradicting clause: " + SLits((span<TULit>)contradictingCls) + "\n"));
-
+	
 	// The other case is taken care of by the CDCL-loop in Solve
 	assert(GetAssignedDecLevel(contradictingCls[0]) == GetAssignedDecLevel(contradictingCls[1]));
 	// Again, any backtracking is taken care of by the CDCL-loop in Solve
@@ -541,6 +541,8 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 			}
 			ClsDelNewLearntOrGlueUpdate(longClsInd, oldGlue);
 		}
+
+		assert(NV(2) || !IsCbLearntOrDrat() || P("Deriving external clause for conflict " + to_string(m_Stat.m_Conflicts) + ": " + SLits(cls, true) + "\n"));
 	};
 
 	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd, false);
@@ -576,7 +578,8 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 					DeleteCls(contradictionInfo.m_ParentClsInd);
 					contradictionInfo.m_IsContradictionInBinaryCls = true;
 					contradictionInfo.m_BinClause = { l1, l2 };
-					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true);
+					// The 2nd parameter doesn't matter since the clause is binary
+					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true, true);
 				};
 
 				auto Contradicting2BinaryByRemovingLevel0 = [&]()
@@ -591,14 +594,17 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 					}
 					assert(currGoodLitInd == 2);
 					contradictionInfo.m_IsContradictionInBinaryCls = true;
-					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true);
+					// The 2nd parameter doesn't matter since the clause is binary
+					AddClsToBufferAndWatch(contradictionInfo.m_BinClause, true, true);
 				};
 
 				// If the clause is binary, the parent will contain only the other literal (without l), but we don't need l anyway
 				// If the clause isn't binary, the parent will be complete, which is fine too
 				auto parent = GetAssignedNonDecParentSpanVI(ai, vi);
 				const auto psNo0 = parent.size() == 1 ? 2 : SizeWithoutDecLevel0(parent);
-				assert(NV(2) || P("Visited var: " + SVar(v) + "; Visited clause: " + SLits((span<TULit>)parent) + "\n"));
+				assert(NV(2) || P("Visited var: " + SVar(v) + 
+					(!IsCbLearntOrDrat() ? "" : "; external-lit = " + to_string(GetExternalLit(GetAssignedLitForVar(v)))) +
+					"; Visited clause: " + SLits((span<TULit>)parent) + "\n"));
 				const auto visitedBefore = m_VisitedVars.size();
 				VisitCls(parent, ai.IsAssignedBinary() ? BadClsInd : vi.m_ParentClsInd,
 					IsOnTheFlySubsumptionParentOn() && psNo0 > 2 && (IsParentLongInitial(ai, vi) || psNo0 < m_ParamOnTheFlySubsumptionParentMinGlueToDisable));
@@ -858,7 +864,9 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 
 	if (!contradictingIsLearnt)
 	{
-		clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevDecLevels, !addInitCls);
+		// Always part of proof, even if stays initial (that is, not deletable)
+		// Added this part to fix a DRAT bug
+		clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevDecLevels, !addInitCls, true);
 	}
 
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
@@ -1075,7 +1083,7 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 
 	assert(NV(1) || P("New flipped clause at level " + to_string(m_DecLevel) + " : " + SLits(visitedNegLitsPrevFlippedLevels.get_const_span()) + "\n"));
 
-	auto clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevFlippedLevels, true);
+	auto clsStart = AddClsToBufferAndWatch(visitedNegLitsPrevFlippedLevels, true, true);
 
 	assert(NV(2) || P("Flipped clause recorded: " + SLits(visitedNegLitsPrevFlippedLevels.get_const_span()) + "\n"));
 	++m_Stat.m_FlippedClauses;
@@ -1088,6 +1096,18 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 	return make_pair(visitedNegLitsPrevFlippedLevels.get_span(), clsStart);
 }
 
+
+template <typename TLit, typename TUInd, bool Compress>
+void Topor::CTopi<TLit, TUInd, Compress>::OnBadDratFile()
+{
+	ofstream& o = *m_OpenedDratFile;
+	assert(!o.good());
+	SetStatus(TToporStatus::STATUS_DRAT_FILE_PROBLEM, (string)"Problem with DRAT file generation: " +
+		(string)((o.rdstate() & std::ifstream::badbit) ? "Read/writing error on i/o operation" :
+			(o.rdstate() & std::ifstream::failbit) ? "Logical error on i/o operation" :
+			(o.rdstate() & std::ifstream::eofbit) ? "End-of-File reached on input operation" : "Unknown error"));
+}
+
 template <typename TLit, typename TUInd, bool Compress>
 void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULit> learntCls)
 {
@@ -1097,10 +1117,18 @@ void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULi
 	auto userClsSpan = m_UserCls.get_span();
 	transform(learntCls.begin(), learntCls.end(), userClsSpan.begin(), [&](TULit l)
 	{
-		TUVar v = GetVar(l);
-		TLit userLit = m_I2ELitMap[v];
-		return IsNeg(l) ? -userLit : userLit;
+		return GetExternalLit(l);
 	});
+	
+	if (m_DratSortEveryClause)
+	{
+		sort(userClsSpan.begin(), userClsSpan.end(), [&](TLit l1, TLit l2)
+		{
+			const auto l1Abs = l1 < 0 ? -l1 : l1;
+			const auto l2Abs = l2 < 0 ? -l2 : l2;
+			return l1Abs < l2Abs;
+		});
+	}
 
 	if (m_OpenedDratFile != nullptr)
 	{
@@ -1108,10 +1136,7 @@ void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULi
 
 		if (!o.good())
 		{
-			SetStatus(TToporStatus::STATUS_DRAT_FILE_PROBLEM, (string)"Problem with DRAT file generation: " +
-				(string)((o.rdstate() & std::ifstream::badbit) ? "Read/writing error on i/o operation" :
-					(o.rdstate() & std::ifstream::failbit) ? "Logical error on i/o operation" :
-					(o.rdstate() & std::ifstream::eofbit) ? "End-of-File reached on input operation" : "Unknown error"));
+			OnBadDratFile();
 			return;
 		}
 
@@ -1140,7 +1165,6 @@ void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULi
 			}
 			o << "0" << endl;
 		}
-
 	}
 
 	if (M_CbNewLearntCls != nullptr)
@@ -1224,7 +1248,8 @@ void CTopi<TLit, TUInd, Compress>::RemoveLitsFromSubsumed()
 				const TULit l2 = parentCls[GetVar(parentCls[2]) == v ? 1 : 2];
 				DeleteCls(m_VarInfo[v].m_ParentClsInd);
 				array<TULit, 2> binCls = { l1, l2 };
-				AddClsToBufferAndWatch(binCls, true);
+				// The 2nd parameter doesn't matter since the clause is binary
+				AddClsToBufferAndWatch(binCls, true, true);
 			}
 			else
 			{

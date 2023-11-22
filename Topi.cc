@@ -531,7 +531,7 @@ void CTopi<TLit, TUInd, Compress>::AddUserClause(const span<TLit> c)
 		return;
 	}
 
-	auto clsStart = AddClsToBufferAndWatch(cls, false);
+	auto clsStart = AddClsToBufferAndWatch(cls, false, false);
 	assert(NV(2) || P("Clause start is " + HexStr(clsStart) + "\n"));
 	if (unlikely(IsUnrecoverable())) return;
 
@@ -931,6 +931,17 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		vector<TULit> emptyCls;
 		NewLearntClsApplyCbLearntDrat(emptyCls);
 	}
+
+	CApplyFuncOnExitFromScope<> textDratAddCommentOnExit(m_OpenedDratFile != nullptr && !m_IsDratBinary, [&]()
+	{
+		ofstream& o = *m_OpenedDratFile;
+		if (!o.good())
+		{
+			OnBadDratFile();
+			return;
+		}
+		o << "c query completed " << m_Stat.m_SolveInvs << "\n";
+	});
 
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
 

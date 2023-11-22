@@ -86,7 +86,7 @@ namespace Topor
 		// Get the explanation for the current status (returns the empty string, if there is no error and verbosity is off)
 		string GetStatusExplanation() const { return IsError() || m_ParamVerbosity > 0 ? m_StatusExplanation : ""; }
 		// Dump DRAT, if invoked
-		void DumpDrat(ofstream& openedDratFile, bool isDratBinary) { m_OpenedDratFile = &openedDratFile; m_IsDratBinary = isDratBinary; }
+		void DumpDrat(ofstream& openedDratFile, bool isDratBinary, bool dratSortEveryClause) { m_OpenedDratFile = &openedDratFile; m_IsDratBinary = isDratBinary; m_DratSortEveryClause = dratSortEveryClause; }
 		// Set callback: stop-now
 		void SetCbStopNow(TCbStopNow CbStopNow) { M_CbStopNow = CbStopNow; }
 		// Interrupt now
@@ -377,8 +377,8 @@ namespace Topor
 		CDynArray<TULit> m_E2ILitMap;
 		CVector<TLit> m_NewExternalVarsAddUserCls;
 		// internal variable-->external literal map (initialized only, if required, e.g., for callbacks)
-		CDynArray<TLit> m_I2ELitMap;
-		inline TLit GetExternalLit(TULit iLit) { return IsNeg(iLit) ? -m_I2ELitMap[GetVar(iLit)] : m_I2ELitMap[GetVar(iLit)]; }
+		CDynArray<TLit> m_I2ELitMap;		
+		inline TLit GetExternalLit(TULit iLit) const { assert(UseI2ELitMap());  return IsNeg(iLit) ? -m_I2ELitMap[GetVar(iLit)] : m_I2ELitMap[GetVar(iLit)]; }
 		bool UseI2ELitMap() const { return m_ParamVerifyDebugModelInvocation != 0 || IsCbLearntOrDrat() || M_ReportUnitCls != nullptr; }
 		void UpdateI2EMapIfRequired();		
 		static constexpr TLit ExternalLit2ExternalVar(TLit l) { return l > 0 ? l : -l; }
@@ -1881,7 +1881,7 @@ protected:
 
 		void RecordDeletedLitsFromCls(TUV litsNum, uint16_t bitsForLit = 0);
 		// Returns clause index for long clauses
-		TUInd AddClsToBufferAndWatch(const TSpanTULit cls, bool isLearnt);
+		TUInd AddClsToBufferAndWatch(const TSpanTULit cls, bool isLearntNotForDeletion, bool isPartOfProof);
 		size_t SizeWithoutDecLevel0(const span<TULit> cls) const;
 
 		/*
@@ -2492,6 +2492,7 @@ protected:
 		void UpdateAllUipInfoAfterRestart();
 		
 		inline bool IsCbLearntOrDrat() const { return M_CbNewLearntCls != nullptr || m_OpenedDratFile != nullptr; }
+		void OnBadDratFile();
 		void NewLearntClsApplyCbLearntDrat(const span<TULit> learntCls);
 
 		void RemoveLitsFromSubsumed();
@@ -2835,6 +2836,7 @@ protected:
 
 		ofstream* m_OpenedDratFile = nullptr;
 		bool m_IsDratBinary = true;
+		bool m_DratSortEveryClause = false;
 
 		/*
 		* Callbacks
@@ -2862,23 +2864,47 @@ protected:
 		string SLit(TULit l) const;
 		string STrail();
 		template <class TULitSpan>
-		string SLits(TULitSpan tulitSpan)
+		string SLits(TULitSpan tulitSpan, bool toExternal = false)
 		{
 			stringstream ss;
-
-			for (auto l : tulitSpan)
+			if (toExternal && m_DratSortEveryClause)
 			{
-				ss << SLit(l) << " ";
+				vector<TLit> externalLits(tulitSpan.size());
+				transform(tulitSpan.begin(), tulitSpan.end(), externalLits.begin(), [&](TULit l)
+				{
+					return GetExternalLit(l);
+				});
+				sort(externalLits.begin(), externalLits.end(), [&](TLit l1, TLit l2)
+				{
+					const auto l1Abs = l1 < 0 ? -l1 : l1;
+					const auto l2Abs = l2 < 0 ? -l2 : l2;
+					return l1Abs < l2Abs;
+				});
+
+				for (auto l : externalLits)
+				{
+					ss << to_string(l) << " ";
+				}
 			}
+			else
+			{ 
+				for (auto l : tulitSpan)
+				{
+					ss << (toExternal ? to_string(GetExternalLit(l)) : SLit(l)) << " ";
+				}
+			}
+			
+
 
 			return ss.str().substr(0, ss.str().size() - 1);
 		}
+		
 		string SUserLits(const span<TLit> litSpan) const;
 		string SVars(const TSpanTULit varSpan) const;
 		string SReuseTrailEntry(const TReuseTrail& rt);
 		string SReuseTrail();
 		string SE2I();
-
+	
 		bool P(const string& s);
 
 		vector<bool> m_DebugModel;

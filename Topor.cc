@@ -171,9 +171,9 @@ std::string CTopor<TLit,TUInd,Compress>::GetParamsDescr() const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopor<TLit,TUInd,Compress>::DumpDrat(ofstream& openedDratFile, bool isDratBinary)
+void CTopor<TLit,TUInd,Compress>::DumpDrat(ofstream& openedDratFile, bool isDratBinary, bool dratSortEveryClause)
 {
-	m_Topi->DumpDrat(openedDratFile, isDratBinary);
+	m_Topi->DumpDrat(openedDratFile, isDratBinary, dratSortEveryClause);
 }
 
 template <typename TLit, typename TUInd, bool Compress>

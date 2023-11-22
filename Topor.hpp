@@ -63,7 +63,7 @@ namespace Topor
 		void CreateInternalLit(TLit l);
 		
 		// Dump DRAT
-		void DumpDrat(std::ofstream& openedDratFile, bool isDratBinary);
+		void DumpDrat(std::ofstream& openedDratFile, bool isDratBinary, bool dratSortEveryClause);
 		// Backtrack to the provided decision level
 		void Backtrack(TLit decLevel);
 		// Changing the configuration to # configNum, so that every configNum generates a unique configuration, where 0 makes no change. This is used for enabling different configs in parallel solving. Returns a unique configuration string"

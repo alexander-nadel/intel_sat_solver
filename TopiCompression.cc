@@ -623,8 +623,8 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 				array<TULit, 2> newBinClsSifted = { RetSiftedLit(newBinCls[0]), RetSiftedLit(newBinCls[1]) };
 
 				DeleteCls(clsInd, &newBinClsSifted);
-
-				AddClsToBufferAndWatch(newBinCls, true);
+				// The 2nd parameter doesn't matter since the clause is binary
+				AddClsToBufferAndWatch(newBinCls, true, true);
 				assert(NV(2) || P("\tThe clause has become binary: " + SLits(newBinCls) + "\n"));
 				if (unlikely(IsUnrecoverable())) return;
 
