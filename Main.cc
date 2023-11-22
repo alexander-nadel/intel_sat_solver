@@ -228,6 +228,7 @@ int main(int argc, char** argv)
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/print_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("1") << " : " << "print the indices of the assumptions in the unsatisfiable core for unsatisfiable invocations (0-indexed)?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_model") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the models for satisfiable invocations?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/verify_ucore") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "verify the unsatisfiable cores in terms of assumptions for unsatisfiable invocations?\n";
+		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/ignore_file_params") << " : bool (0 or 1); default = " << print_as_color<ansi_color_code::green>("0") << " : " << "ignore parameter settings in the input file (lines starting with 'r')?\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_models_number") << " : unsigned long integer; default = 1" << print_as_color<ansi_color_code::green>("1") << " : " << "the maximal number of models for AllSAT. AllSAT with blocking clauses over /topor_tool/allsat_blocking_variables's variables is invoked if: (1) this parameter is greater than 1; (2) the CNF format is DIMACS without Topor-specific commands; (3) /topor_tool/allsat_blocking_variables is non-empty\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables") << " : string; default = " << print_as_color<ansi_color_code::green>("\"\"") << " : " << "if /topor_tool/allsat_models_number > 1, specifies the variables which will be used for blocking clauses, sperated by a comma, e.g., 1,4,5,6,7,15.\n";
 		cout << "\tc " << print_as_color <ansi_color_code::cyan>("/topor_tool/allsat_blocking_variables_file_alg") << " : string; default = " << print_as_color<ansi_color_code::green>("3") << " : " << "if /topor_tool/allsat_models_number > 1 and our parameter > 0, read the blocking variables from the first comment line in the file (format: c 1,4,5,6,7,15), where the value means: 1 -- assign lowest internal SAT variables to blocking; 2 -- assign highest internal SAT variables to blocking; >=3 -- assign their own internal SAT variables to blocking \n";
@@ -252,6 +253,7 @@ int main(int argc, char** argv)
 	bool printUcore = false;
 	bool verifyModel = false;
 	bool verifyUcore = false;
+	bool ignoreFileParams = false;
 	unsigned long allsatModels = 0;
 	vector<TLit> blockingVars;
 	unsigned long allsatBlockingFromInstanceAlg = 3;
@@ -678,6 +680,17 @@ int main(int argc, char** argv)
 							return true;
 						}
 					}
+					else if (param == "ignore_file_params")
+					{
+						cout << "c /topor_tool/ignore_file_params " << paramValStr << endl;
+						string errMsg;
+						ignoreFileParams = ReadBoolParam(errMsg);
+						if (!errMsg.empty())
+						{
+							cout << errMsg;
+							return true;
+						}
+					}
 					else if (param == "solver_mode")
 					{
 						cout << "c /topor_tool/solver_mode " << paramValStr << endl;
@@ -965,28 +978,31 @@ int main(int argc, char** argv)
 
 		if (line[currLineI] == 'r')
 		{
-			string lStr = line;
-
-			const size_t paramNameStart = 2;
-			const size_t paramNameEnd = lStr.find(' ', 2);
-			if (paramNameEnd == string::npos)
+			if (!ignoreFileParams)
 			{
-				throw logic_error("c topor_tool ERROR: expected <paramName> never ended at line number " + to_string(lineNum));
-			}
-			const string paramName = lStr.substr(paramNameStart, paramNameEnd - paramNameStart);
-			const string paramVal = lStr.substr(paramNameEnd + 1);
+				string lStr = line;
 
-			double paramValDouble = numeric_limits<double>::infinity();
-			try
-			{
-				paramValDouble = stod(paramVal);
-			}
-			catch (...)
-			{
-				throw logic_error("c topor_tool ERROR: couldn't convert the parameter value to double at line number " + to_string(lineNum));
-			}
+				const size_t paramNameStart = 2;
+				const size_t paramNameEnd = lStr.find(' ', 2);
+				if (paramNameEnd == string::npos)
+				{
+					throw logic_error("c topor_tool ERROR: expected <paramName> never ended at line number " + to_string(lineNum));
+				}
+				const string paramName = lStr.substr(paramNameStart, paramNameEnd - paramNameStart);
+				const string paramVal = lStr.substr(paramNameEnd + 1);
 
-			ToporSetParam(paramName, paramValDouble);
+				double paramValDouble = numeric_limits<double>::infinity();
+				try
+				{
+					paramValDouble = stod(paramVal);
+				}
+				catch (...)
+				{
+					throw logic_error("c topor_tool ERROR: couldn't convert the parameter value to double at line number " + to_string(lineNum));
+				}
+
+				ToporSetParam(paramName, paramValDouble);
+			}
 
 			continue;
 		}

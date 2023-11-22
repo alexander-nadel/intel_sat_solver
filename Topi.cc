@@ -46,6 +46,80 @@ void CTopi<TLit, TUInd, Compress>::DumpSetUp(const char* filePrefix)
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+void CTopi<TLit, TUInd, Compress>::ReadAnyParamsFromFile()
+{
+	const char* configFileName = getenv("TOPOR_CONFIG_FILE");
+	if (configFileName == nullptr)
+	{
+		return;
+	}
+
+	fstream tcf(configFileName, ios::in);
+	if (!tcf.is_open())
+	{
+		SetStatus(TToporStatus::STATUS_PARAM_ERROR, "Cannot open the configuration parameter file " + (string)configFileName);
+		return;
+	}
+
+	string paramSetting;
+
+	auto Trim = [&](string_view s)
+	{
+		s.remove_prefix(min(s.find_first_not_of(" \t\r\v\n"), s.size()));
+		s.remove_suffix(min(s.size() - s.find_last_not_of(" \t\r\v\n") - 1, s.size()));
+
+		return s;
+	};
+
+
+	unsigned lineNum = 1;
+	while (getline(tcf, paramSetting))
+	{
+		auto SetErrStatus = [&](const string& reason)
+		{
+			SetStatus(TToporStatus::STATUS_PARAM_ERROR, "Could parse line" + to_string(lineNum) + " : " + paramSetting + " (after trimming \\t\\r\\v\\n); Reason: " + reason);
+		};
+
+		// Consider paramSetting = " /q/w 1\n"
+		// After Trim, we'll have paramSetting = "/q/w 1"
+		Trim(paramSetting);
+		
+		// spaceInd = 4 for "/q/w 1"
+		auto spaceInd = paramSetting.find(' ');
+		if (spaceInd == string::npos)
+		{
+			SetErrStatus("space not found");
+			return;
+		}
+		
+		// paramName = "/q/w" for "/q/w 1"
+		const string paramName = paramSetting.substr(0, spaceInd);
+		// paramVal = "1" for "/q/w 1"
+		const string paramVal = paramSetting.substr(spaceInd + 1, string::npos);
+		double paramValDouble;
+		try
+		{
+			paramValDouble = stod(paramVal);
+		}
+		catch (...)
+		{
+			SetErrStatus("couldn't convert the value " + paramVal + " to double");
+			return;
+		}
+
+		SetParam(paramName, paramValDouble);
+		if (IsUnrecoverable())
+		{
+			return;
+		}
+
+		++lineNum;
+	}
+
+	tcf.close();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 CTopi<TLit, TUInd, Compress>::CTopi(TLit varNumHint) : m_InitVarNumAlloc(varNumHint <= 0 ? InitEntriesInB : (size_t)varNumHint + 1), m_E2ILitMap(m_InitVarNumAlloc, (size_t)0),
 m_HandleNewUserCls(m_InitVarNumAlloc), m_Watches(GetInitLitNumAlloc(), (size_t)0), m_TrailLastVarPerDecLevel(1, BadClsInd),
 m_VarInfo(m_InitVarNumAlloc, (size_t)0),
@@ -56,10 +130,10 @@ m_Stat([&]() { return Compress ? m_BC.size() : 1; }, [&]() { return Compress ? B
 	static bool diamondInvokedTopor = false;
 	DIAMOND("topor", diamondInvokedTopor);
 
-	const char* fileName = getenv("TOPOR_DUMP_NAME");
-	if (fileName != NULL)
+	const char* dumpFileName = getenv("TOPOR_DUMP_NAME");
+	if (dumpFileName != nullptr)
 	{
-		DumpSetUp(fileName);
+		DumpSetUp(dumpFileName);
 		assert(m_DumpFile);
 		if (m_DumpFile) (*m_DumpFile) << "p cnf " << varNumHint << " " << 0 << endl;
 	}
@@ -94,6 +168,8 @@ m_Stat([&]() { return Compress ? m_BC.size() : 1; }, [&]() { return Compress ? B
 	}
 
 	SetMultipliers();
+
+	ReadAnyParamsFromFile();
 
 	// m_DebugModel = { false, true, false, true, false, false, false, true, false, false, false, false, true, false, true, false, false, true, true, true, true };
 }

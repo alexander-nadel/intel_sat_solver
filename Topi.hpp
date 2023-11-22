@@ -344,6 +344,8 @@ namespace Topor
 		CTopiParam<bool> m_ParamPhaseBoostFlippedForced = { m_Params, "/phase/boost_flipped_forced", "Phase management: boost the scores of forced variables, flipped by BCP?", false };
 		CTopiParam<uint8_t> m_ParamUpdateParamsWhenVarFixed = { m_Params, "/phase/update_params_when_var_fixed", "Phase management: update the parameters to pre-defined values, when fixed-only-once (1) or fixed-forever (2) or either (3)", {0, 0, 0, 0, 0, 0, 0, 0, 3}, 0, 3 };
 
+		void ReadAnyParamsFromFile();
+
 		/*
 		* INITIALIZATION-RELATED
 		*/
