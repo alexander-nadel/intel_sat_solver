@@ -1263,7 +1263,7 @@ void CTopi<TLit, TUInd, Compress>::RemoveLitsFromSubsumed()
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail)
+void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& contradictionInfo)
 {
 	while (m_Status == TToporStatus::STATUS_UNDECIDED && contradictionInfo.IsContradiction())
 	{
@@ -1344,7 +1344,7 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 		// Determine how to backtrack 		
 		const bool isChronoBt = m_EarliestFalsifiedAssump != BadULit || conflictAtAssumptionLevel || (m_ConfsSinceNewInv >= m_ParamConflictsToPostponeChrono && m_DecLevel - ncbBtLevel > m_CurrChronoBtIfHigher) || maxDecLevelInContradictingCls <= m_DecLevelOfLastAssignedAssumption;
 		const auto btLevel = isChronoBt ? (m_EarliestFalsifiedAssump != BadULit || conflictAtAssumptionLevel || m_CurrCustomBtStrat == 0 || ncbBtLevel + 1 == m_DecLevel ? m_DecLevel - 1 : GetDecLevelWithBestScore(ncbBtLevel + 1, m_DecLevel)) : ncbBtLevel;
-		Backtrack(btLevel, false, reuseTrail);
+		Backtrack(btLevel, false);
 		Assign(m_FlippedLit = cls[0], cls.size() >= 2 ? assertingClsInd : BadClsInd, cls.size() == 1 ? BadULit : cls[1], cls.size() == 1 ? 0 : GetAssignedDecLevel(cls[1]));
 		assert(NV(2) || P("***** Flipped former UIP to " + SLit(cls[0]) + "\n"));
 		if (!additionalCls.empty() && !IsAssigned(additionalCls[0]) && all_of(additionalCls.begin() + 1, additionalCls.end(), [&](TULit l) { return IsFalsified(l); }))

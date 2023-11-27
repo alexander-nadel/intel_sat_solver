@@ -723,7 +723,7 @@ void CTopi<TLit, TUInd, Compress>::AssignAssumptions(size_t firstUnassignedAssum
 					assert(!isContraditory);
 
 					TContradictionInfo contradictionInfo = BCP();
-					ConflictAnalysisLoop(contradictionInfo, false);
+					ConflictAnalysisLoop(contradictionInfo);
 					if (unlikely(IsUnrecoverable())) return;
 
 					if (m_EarliestFalsifiedAssump != BadULit)
@@ -1242,7 +1242,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		TContradictionInfo contradictionInfo = BCP();
 		const bool isContradictionBeforeConflictAnalysis = contradictionInfo.IsContradiction();
 
-		ConflictAnalysisLoop(contradictionInfo, m_ParamReuseTrail);
+		ConflictAnalysisLoop(contradictionInfo);
 		if (unlikely(IsUnrecoverable())) return trv = StatusToRetVal();
 
 		if (!contradictionInfo.IsContradiction() && (m_EarliestFalsifiedAssump == BadULit || !IsAssigned(m_EarliestFalsifiedAssump)) && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
@@ -1289,7 +1289,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 
 		if (m_Status == TToporStatus::STATUS_UNDECIDED && isContradictionBeforeConflictAnalysis && Restart())
 		{
-			Backtrack(m_DecLevelOfLastAssignedAssumption, false, m_ParamReuseTrail);
+			Backtrack(m_DecLevelOfLastAssignedAssumption, false);
 			if (M_GetNextUnitClause != nullptr)
 			{
 				const auto assignedVarsNumBefore = m_AssignedVarsNum;
@@ -1630,7 +1630,6 @@ string Topor::CTopi<TLit, TUInd, Compress>::GetMemoryLayout() const
 	name2Mb["m_ToPropagate"] = m_ToPropagate.memMb();
 	name2Mb["m_Cis"] = m_Cis.memMb();
 	name2Mb["m_Dis"] = m_Dis.memMb();
-	name2Mb["m_ReuseTrail"] = m_ReuseTrail.memMb();
 	name2Mb["m_VarsParentSubsumed"] = m_VarsParentSubsumed.memMb();
 	name2Mb["m_HandyLitsClearBefore"] = m_HandyLitsClearBefore[0].memMb() + m_HandyLitsClearBefore[1].memMb();
 	name2Mb["m_VisitedVars"] = m_VisitedVars.memMb();

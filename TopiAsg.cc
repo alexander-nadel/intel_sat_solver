@@ -139,7 +139,7 @@ bool CTopi<TLit,TUInd,Compress>::Assign(TULit l, TUInd parentClsInd, TULit other
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit,TUInd,Compress>::UnassignVar(TUVar v, bool reuseTrail)
+void CTopi<TLit,TUInd,Compress>::UnassignVar(TUVar v)
 {
 	assert(v < m_VarInfo.cap());
 	assert(m_AssignmentInfo[v].m_IsAssigned);
@@ -175,12 +175,6 @@ void CTopi<TLit,TUInd,Compress>::UnassignVar(TUVar v, bool reuseTrail)
 		{
 			m_TrailLastVarPerDecLevel[lDecLevel] = m_VarInfo[v].m_TrailPrev;
 		}
-	}
-
-	if (reuseTrail && lDecLevel != m_DecLevel)
-	{
-		m_AssignmentInfo[v].m_IsLastParentBin = m_AssignmentInfo[v].IsAssignedBinary();
-		m_ReuseTrail.emplace_back(TReuseTrail(GetAssignedLitForVar(v), m_VarInfo[v].m_ParentClsInd));
 	}
 
 	m_AssignmentInfo[v].Unassign();

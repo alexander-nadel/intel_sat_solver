@@ -40,44 +40,6 @@ std::string CTopi<TLit, TUInd, Compress>::SLit(TULit l) const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-string CTopi<TLit, TUInd, Compress>::SReuseTrailEntry(const TReuseTrail& rt)
-{
-	stringstream ss;
-
-	ss << SLit(rt.m_L) << " {";
-
-	if (m_AssignmentInfo[GetVar(rt.m_L)].m_IsLastParentBin)
-	{
-		ss << SLit(rt.m_BinOtherLit);
-	}
-	else if (rt.m_ParentClsInd != BadClsInd)
-	{
-		ss << SLits(Cls(rt.m_ParentClsInd));
-	}
-
-	ss << "}; ";
-
-	return ss.str();
-}
-
-template <typename TLit, typename TUInd, bool Compress>
-string CTopi<TLit, TUInd, Compress>::SReuseTrail()
-{
-	stringstream ss;
-
-	ss << "Trail to reuse (reversed):\n";
-
-	for (size_t i = m_ReuseTrail.size() - 1; i != numeric_limits<size_t>::max(); --i)
-	{
-		ss << SReuseTrailEntry(m_ReuseTrail[i]);
-	}
-
-	ss << endl;
-
-	return ss.str();
-}
-
-template <typename TLit, typename TUInd, bool Compress>
 string CTopi<TLit, TUInd, Compress>::SE2I()
 {
 	stringstream ss;

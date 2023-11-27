@@ -197,7 +197,7 @@ void CTopor<TLit,TUInd,Compress>::SetCbNewLearntCls(TCbNewLearntCls<TLit> CbNewL
 template <typename TLit, typename TUInd, bool Compress>
 void CTopor<TLit,TUInd,Compress>::Backtrack(TLit decLevel)
 {
-	m_Topi->Backtrack(decLevel, false, false, true);
+	m_Topi->Backtrack(decLevel, false, true);
 }
 
 template <typename TLit, typename TUInd, bool Compress>

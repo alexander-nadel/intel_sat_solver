@@ -159,111 +159,6 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 	};
 
 	// Returns true iff BCP should stop propagating the current literal
-	auto ReuseTrail = [&]()
-	{
-		assert(m_ParamReuseTrail);
-
-		// Each iteration handles one decision level
-		while (!m_ReuseTrail.empty())
-		{
-			// The top literal must be a decision literal for each new iteration
-			assert(m_ReuseTrail.back().m_ParentClsInd == BadClsInd);
-
-			if (!IsAssigned(m_ReuseTrail.back().m_L))
-			{
-				// If the decision literal is unassigned, we cannot reuse the trail yet, but we still hope to be able to use it
-				return false;
-			}
-			else if (IsFalsified(m_ReuseTrail.back().m_L))
-			{
-				// If the decision literal is falsified, we cannot reuse the saved trail anymore, so we clean it up				
-				m_ReuseTrail.clear();
-				assert(NV(2) || P("Reusing trail: cleaned-up\n"));
-				return false;
-			}
-
-			// The decision literal in the reused trail is satisfied --> we can re-propagate all the implications
-			assert(IsSatisfied(m_ReuseTrail.back().m_L));
-			assert(NV(2) || P("Reusing trail: the following decision literal is satisfied: " + SReuseTrailEntry(m_ReuseTrail.back()) + "\n"));
-			m_ReuseTrail.pop_back();
-			while (!m_ReuseTrail.empty() && m_ReuseTrail.back().m_ParentClsInd != BadClsInd)
-			{
-				const TULit currImpliedLit = m_ReuseTrail.back().m_L;
-				const TUVar currImpliedVar = GetVar(currImpliedLit);
-				const bool isBinParent = m_AssignmentInfo[currImpliedVar].m_IsLastParentBin;
-				const TUInd parentClsInd = m_ReuseTrail.back().m_ParentClsInd;
-				const TULit binOtherLit = m_ReuseTrail.back().m_BinOtherLit;
-
-				assert(NV(2) || P("Reusing trail: checking the following implied literal: " + SReuseTrailEntry(m_ReuseTrail.back()) + "\n"));
-
-				if ((!IsAssigned(currImpliedLit) || IsFalsified(currImpliedLit)) && !isBinParent)
-				{
-					// Making sure: (1) our literal is the first one in the parent clause, and 
-					// (2) the other watch has the highest possible decision level
-
-					auto cls = Cls(parentClsInd);
-					assert(NV(2) || P("\tReusing trail: long parent before fixing: " + SLits(cls) + "\n"));
-					assert(cls[0] == currImpliedLit || cls[1] == currImpliedLit || IsFalsified(currImpliedLit));
-
-					if (cls[1] == currImpliedLit) swap(cls[0], cls[1]);
-					const TUV cls1DecLevel = GetAssignedDecLevel(cls[1]);
-
-					auto maxNonWLDecLevelIt = GetAssignedLitsHighestDecLevelIt(cls, 2);
-					if (cls1DecLevel < GetAssignedDecLevel(*maxNonWLDecLevelIt))
-					{
-						SwapWatch(parentClsInd, true, maxNonWLDecLevelIt);
-						if (unlikely(IsUnrecoverable())) return false;
-					}
-					else if (!IsAssigned(currImpliedLit))
-					{
-						WLSetCached(cls[1], parentClsInd, cls[0]);
-					}
-
-					if (cls[0] != currImpliedLit)
-					{
-						assert(IsFalsified(currImpliedLit));
-						const TUV cls0DecLevel = GetAssignedDecLevel(cls[0]);
-						maxNonWLDecLevelIt = GetAssignedLitsHighestDecLevelIt(cls, 2);
-						if (cls0DecLevel < GetAssignedDecLevel(*maxNonWLDecLevelIt))
-						{
-							SwapWatch(parentClsInd, false, maxNonWLDecLevelIt);
-							if (unlikely(IsUnrecoverable())) return false;
-						}
-					}
-					assert(NV(2) || P("\tReusing trail: long parent fixed: " + SLits(cls) + "\n"));
-				}
-
-				if (!IsAssigned(currImpliedLit))
-				{
-					if (isBinParent)
-					{
-						Assign(currImpliedLit, BadClsInd, binOtherLit, GetAssignedDecLevel(m_ReuseTrail.back().m_BinOtherLit));
-					}
-					else
-					{
-						const auto cls = ConstClsSpan(parentClsInd, 2);
-						Assign(currImpliedLit, parentClsInd, BadULit, GetAssignedDecLevel(cls[1]));
-					}
-					++m_Stat.m_ReuseTrailAsssignments;
-					assert(NV(2) || P("\tReusing trail: assigned the unassigned literal " + SLit(currImpliedLit) + "\n"));
-				}
-				else if (IsFalsified(currImpliedLit))
-				{
-					// Contradiction!
-					++m_Stat.m_ReuseTrailContradictions;
-					assert(NV(2) || P("\tReusing trail: contradiction!\n"));
-					m_ReuseTrail.clear();
-
-					return NewContradiction(isBinParent ? TContradictionInfo({ currImpliedLit, binOtherLit }) : TContradictionInfo(parentClsInd));
-				}
-
-				m_ReuseTrail.pop_back();
-			}
-		}
-
-		return false;
-	};
-
 	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
 
@@ -324,14 +219,7 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 			if (!isOtherWatchAssigned)
 			{
 				// Imply otherWatch at the decision level of l
-				Assign(otherWatch, BadClsInd, Negate(m_CurrentlyPropagatedLit), vi.m_DecLevel);
-				if (m_ParamReuseTrail && !m_ReuseTrail.empty())
-				{
-					stopPropagating = ReuseTrail();
-					if (stopPropagating) break;
-					// ReuseTrail might realloc, hence updating binWatches
-					binWatches = TSpanTULit(m_W.get_ptr(wi.m_WBInd) + wi.GetLongEntries(), wi.m_BinaryWatches);
-				}
+				Assign(otherWatch, BadClsInd, Negate(m_CurrentlyPropagatedLit), vi.m_DecLevel);				
 			}
 			else if (isOtherWatchNegated)
 			{
@@ -475,13 +363,7 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 				// The clause is unit
 				assert(all_of(cls.begin() + 2, cls.end(), [&](TULit l) { return IsFalsified(l); }));
 				// Imply the other watch now
-				Assign(cls[1], clsInd, cls[0], GetAssignedDecLevel(cls[0]));
-				if (m_ParamReuseTrail && !m_ReuseTrail.empty())
-				{
-					stopPropagating = ReuseTrail();
-					// ReuseTrail might realloc, hence updating currLongWatchPtr
-					currLongWatchPtr = m_W.get_ptr_no_assert(wi.m_WBInd) + (currLongWatchInd * TWatchInfo::BinsInLong);
-				}
+				Assign(cls[1], clsInd, cls[0], GetAssignedDecLevel(cls[0]));				
 			}
 			else
 			{

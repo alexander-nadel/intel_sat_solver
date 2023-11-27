@@ -15,7 +15,7 @@ void CTopi<TLit,TUInd,Compress>::BacktrackingInit()
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit,TUInd,Compress>::Backtrack(TLit decLevelL, bool isBCPBacktrack, bool reuseTrail, bool isAPICall)
+void CTopi<TLit,TUInd,Compress>::Backtrack(TLit decLevelL, bool isBCPBacktrack, bool isAPICall)
 {	
 	TUV decLevel = (TUV)decLevelL;
 	//	cout << "\tc b <BacktrackLevel>" << endl;
@@ -25,11 +25,6 @@ void CTopi<TLit,TUInd,Compress>::Backtrack(TLit decLevelL, bool isBCPBacktrack, 
 	{
 		return;
 	}	
-
-	if (m_ParamReuseTrail)
-	{
-		m_ReuseTrail.clear();
-	}
 
 	assert(NV(2) || P("***** Backtracking to " + to_string(decLevel) + "\n"));
 
@@ -49,13 +44,12 @@ void CTopi<TLit,TUInd,Compress>::Backtrack(TLit decLevelL, bool isBCPBacktrack, 
 
 	while (m_TrailEnd != m_TrailLastVarPerDecLevel[decLevel])
 	{
-		UnassignVar(m_TrailEnd, reuseTrail);
+		UnassignVar(m_TrailEnd);
 	}
 		
 	m_DecLevel = decLevel;
 
-	assert(NV(2) || P("***** Backtracked to " + to_string(m_DecLevel) + "\n"));
-	assert(NV(2) || !m_ParamReuseTrail || P(SReuseTrail()) + "\n");
+	assert(NV(2) || P("***** Backtracked to " + to_string(m_DecLevel) + "\n"));	
 }
 
 template class Topor::CTopi<int32_t, uint32_t, false>;

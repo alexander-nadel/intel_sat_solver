@@ -109,7 +109,7 @@ namespace Topor
 		void ClearUserPolarityInfo(TLit vExternal);		
 		// Backtrack to the end of decLevel; the 2nd parameter is required for statistics only
 		// DUMPS
-		void Backtrack(TLit decLevel, bool isBCPBacktrack = false, bool reuseTrail = false, bool isAPICall = false);		
+		void Backtrack(TLit decLevel, bool isBCPBacktrack = false, bool isAPICall = false);		
 		// Changing the configuration to # configNum, so that every configNum generates a unique configuration
 		// This is used for enabling different configs in parallel solving
 		// DUMPS
@@ -229,8 +229,7 @@ namespace Topor
 		CTopiParam<uint8_t> m_ParamCustomBtStratInit = { m_Params, "/backtracking/custom_bt_strat_init", "Initial query: 0: no custom backtracking; 1, 2: backtrack to the level containing the variable with the best score *instead of any instances of supposed chronological backtracking*, where ties are broken based on the value -- 1: higher levels are preferred; 2: lower levels are preferred ", {2, 0, 0, 0, 1, 0, 0, 0, 0}, 0, 2 };
 		CTopiParam<uint8_t> m_ParamCustomBtStratN = { m_Params, "/backtracking/custom_bt_strat_n", "Normal (non-short) incremental query: 0: no custom backtracking; 1, 2: backtrack to the level containing the variable with the best score *instead of any instances of supposed chronological backtracking*, where ties are broken based on the value -- 1: higher levels are preferred; 2: lower levels are preferred ", {0, 0, 0, 0, 1, 0, 0, 0, 0}, 0, 2 };
 		CTopiParam<uint8_t> m_ParamCustomBtStratS = { m_Params, "/backtracking/custom_bt_strat_s", "Short incremental query: 0: no custom backtracking; 1, 2: backtrack to the level containing the variable with the best score *instead of any instances of supposed chronological backtracking*, where ties are broken based on the value -- 1: higher levels are preferred; 2: lower levels are preferred ", {2, 0, 0, 0, 1, 0, 0, 0, 0}, 0, 2 };
-		CTopiParam<bool> m_ParamReuseTrail = { m_Params, "/backtracking/reuse_trail", "0: no trail re-usage; 1: re-use trail (the idea is from SAT'20 Hickey&Bacchus' paper, but our implementation is fully compatible with CB)", 0 };
-
+		
 		// Parameters: BCP
 		constexpr uint8_t InitEntriesPerWL() { return 4 >= TWatchInfo::BinsInLongBitCeil ? 4 : TWatchInfo::BinsInLongBitCeil; };
 		CTopiParam<uint8_t> m_ParamInitEntriesPerWL = { m_Params, "/bcp/init_entries_per_wl", "BCP: the number of initial entries in a watch list", InitEntriesPerWL(), TWatchInfo::BinsInLongBitCeil };
@@ -2131,9 +2130,8 @@ protected:
 			uint8_t m_IsAssump : 1;
 			// relevant only if m_IsAssump=true: is the negation of this variable is the assumption?
 			uint8_t m_IsAssumpNegated : 1;
-			// Was the last parent (at unassignment time) a binary clause; maintained in re-use trail mode only?
-			// Also used as a flag for removing the pivot by on-the-fly subsumption when the variable is assigned
-			uint8_t m_IsLastParentBin : 1;
+			// Reserved
+			uint8_t m_Reserved : 1;
 		};
 		static_assert(sizeof(TAssignmentInfo) == 1);
 
@@ -2312,7 +2310,7 @@ protected:
 		// Returns true iff the assignment is contradictory
 		bool Assign(TULit l, TUInd parentClsInd, TULit otherWatch, TUV decLevel, bool toPropagate = true, bool externalAssignment = false);
 		void Unassign(TULit l);
-		void UnassignVar(TUVar v, bool reuseTrail = false);
+		void UnassignVar(TUVar v);
 		[[maybe_unused]] bool DebugLongImplicationInvariantHolds(TULit l, TUV decLevel, TUInd parentClsIndIfLong);
 		
 		// TULitSpan can be: (1) const span<TULit>, (2) TSpanTULit
@@ -2367,23 +2365,6 @@ protected:
 		bool m_CurrPropWatchModifiedDuringProcessDelayedImplication = false;
 		
 		bool TrailAssertConsistency();
-
-		// Data structure for trail-reuse		
-		struct TReuseTrail
-		{
-			TReuseTrail(TULit l, TUInd parentClsIndOrBinOtherLit) : m_ParentClsInd(parentClsIndOrBinOtherLit), m_L(l) {}
-			// Note that the flag distinguishing between long and binary parents is in TVarInfo (per variable)
-			union
-			{
-				// Parent clause for longs
-				TUInd m_ParentClsInd;
-				// The other literal in the clause for binaries
-				TULit m_BinOtherLit;
-			};
-			TULit m_L;
-		};
-		// The latest trail to re-use (active only if trail reuse is on)
-		CVector<TReuseTrail> m_ReuseTrail;
 
 		void FixPolarityInternal(TULit l, bool onlyOnce = false);
 		void ClearUserPolarityInfoInternal(TUVar v);
@@ -2474,7 +2455,7 @@ protected:
 		* Conflict Analysis and Learning
 		*/
 		
-		void ConflictAnalysisLoop(TContradictionInfo& contradictionInfo, bool reuseTrail = false);
+		void ConflictAnalysisLoop(TContradictionInfo& contradictionInfo);
 
 		// Return: (1) asserting clause span; (2) Clause index (for long clauses)		
 		pair<TSpanTULit, TUInd> LearnAndUpdateHeuristics(TContradictionInfo& contradictionInfo, CVector<TULit>& clsBeforeAllUipOrEmptyIfAllUipFailed);
@@ -2903,8 +2884,6 @@ protected:
 		
 		string SUserLits(const span<TLit> litSpan) const;
 		string SVars(const TSpanTULit varSpan) const;
-		string SReuseTrailEntry(const TReuseTrail& rt);
-		string SReuseTrail();
 		string SE2I();
 	
 		bool P(const string& s);

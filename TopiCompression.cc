@@ -22,7 +22,6 @@ void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
 	if (m_ParamFlippedRecordingMaxLbdToRecord != 0) ReserveExactly(m_HandyLitsClearBefore[1], GetNextVar(), "m_HandyLitsCleanBefore[1] in ReserveVarAndLitData");
 	ReserveExactly(m_VisitedVars, GetNextVar(), "m_VisitedVars in ReserveVarAndLitData");
 	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar(), 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
-	if (m_ParamReuseTrail) ReserveExactly(m_ReuseTrail, GetNextVar(), "m_TrailToReuse in ReserveVarAndLitData");
 	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), 0, "m_I2ELitMap in ReserveVarAndLitData");
 	if (IsCbLearntOrDrat()) ReserveExactly(m_UserCls, GetNextVar(), "m_UserCls in ReserveVarAndLitData");
 	if (m_ParamOnTheFlySubsumptionParentMinGlueToDisable > 0) ReserveExactly(m_CurrClsCounters, GetNextVar(), 0, "m_CurrClsCounters in ReserveVarAndLitData");
@@ -212,11 +211,6 @@ void CTopi<TLit, TUInd, Compress>::DeleteClausesIfRequired()
 		if (unlikely(m_FirstLearntClsInd != numeric_limits<decltype(m_FirstLearntClsInd)>::max() && m_FirstLearntClsInd >= m_BNext))
 		{
 			m_FirstLearntClsInd = numeric_limits<decltype(m_FirstLearntClsInd)>::max();
-		}
-
-		if (m_ParamReuseTrail)
-		{
-			m_ReuseTrail.clear();
 		}
 
 		assert(NV(1) || P("Clause deletion finished for priority\n"));
@@ -413,11 +407,6 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 
 		assert(NV(1) || P("Simplification finished\n"));
 		assert(NV(2) || P("The trail: " + STrail() + "\n"));
-
-		if (m_ParamReuseTrail)
-		{
-			m_ReuseTrail.clear();
-		}
 
 		assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 		assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
