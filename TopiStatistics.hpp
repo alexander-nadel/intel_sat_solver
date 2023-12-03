@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #pragma once
@@ -50,38 +50,42 @@ namespace Topor
 			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(Perc(m_Implications, m_Assignments))) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string((double)m_Implications / m_OverallTime.CpuTimePassedSinceStartOrResetConst())) << " ";
 
-			//if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::bright_magenta: ansi_color_code::none>(" DyiTrg DyiProp DyiDlCo");
-			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::bright_magenta : ansi_color_code::none>(" DyiTrg");
-			ssStat << print_as_color<IsColor ? ansi_color_code::bright_magenta : ansi_color_code::none>(to_string(m_DelayedImplicationsTrigerring)) << " ";
-			//ssStat << print_as_color<IsColor ? ansi_color_code::bright_magenta: ansi_color_code::none>(to_string(m_DelayedImplicationsPropagated)) << " ";
-			//ssStat << print_as_color<IsColor ? ansi_color_code::bright_magenta: ansi_color_code::none>(to_string(m_DelayedImplicationDecLevelsCollapsed)) << " ";
-
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(" Inprocs DupBins");
+			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string(m_Ings)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string(m_IngsDuplicateBinsRemoved)) << " ";
+			
 			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(" Bufs BufSzMb BufCapMb");
 			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string(M_BGetNum())) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string((double)M_BGetSize() / 1000000.)) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string((double)M_BGetCap() / 1000000.)) << " ";
 
-			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(" SolveInvs ShortIncrInvs UserVars IntrVars AddClss ActClss BinAClss LongAClss AvrgAClsLen AvrgALongClsLen LongALrnts Simplfs ClssDels FlpRecs FlpSw FlpUnit SubsLRem AllUipAtmp AllUipSucc AllUipLRem");
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(" SolveInvs ShortIncrInvs");
 			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_SolveInvs)) << " ";
 			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ShortIncSolveInvs)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_MaxUserVar)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_MaxInternalVar)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_AddClauseInvs)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(GetActiveClss())) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ActiveBinaryClss)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ActiveLongClss)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(GetActiveClss() == 0 ? 0.0 : (double)m_ActiveOverallClsLen / (double)GetActiveClss())) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ActiveLongClss == 0 ? 0.0 : (double)(m_ActiveOverallClsLen - (m_ActiveBinaryClss << 1)) / (double)m_ActiveLongClss)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ActiveLongLearntClss)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_Simplifies)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_ClssDel)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_FlippedClauses)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_FlippedClausesSwapped)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_FlippedClausesUnit)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_LitsRemovedByConfSubsumption)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_AllUipAttempted)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_AllUipSucceeded)) << " ";
-			ssStat << print_as_color<IsColor ? ansi_color_code::blue : ansi_color_code::none>(to_string(m_LitsRemovedByAllUip)) << " ";
+			
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::cyan : ansi_color_code::none>(" UserVars IntrVars");
+			ssStat << print_as_color<IsColor ? ansi_color_code::cyan : ansi_color_code::none>(to_string(m_MaxUserVar)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::cyan : ansi_color_code::none>(to_string(m_MaxInternalVar)) << " ";
+
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(" AddClss ActClss BinAClss LongAClss AvrgAClsLen AvrgALongClsLen LongALrnts");
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(m_AddClauseInvs)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(GetActiveClss())) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(m_ActiveBinaryClss)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(m_ActiveLongClss)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(GetActiveClss() == 0 ? 0.0 : (double)m_ActiveOverallClsLen / (double)GetActiveClss())) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(m_ActiveLongClss == 0 ? 0.0 : (double)(m_ActiveOverallClsLen - (m_ActiveBinaryClss << 1)) / (double)m_ActiveLongClss)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::magenta : ansi_color_code::none>(to_string(m_ActiveLongLearntClss)) << " ";
+			
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(" Simplfs ClssDels SubsLRem");
+			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string(m_Simplifies)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string(m_ClssDel)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string(m_LitsRemovedByConfSubsumption)) << " ";
+
+			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(" FlpRecs FlpSw FlpUnit");
+			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string(m_FlippedClauses)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string(m_FlippedClausesSwapped)) << " ";
+			ssStat << print_as_color<IsColor ? ansi_color_code::red : ansi_color_code::none>(to_string(m_FlippedClausesUnit)) << " ";
+		
 
 			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(" Bts");
 			ssStat << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(to_string(m_Backtracks)) << " ";
@@ -94,10 +98,6 @@ namespace Topor
 			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(" LvlsSvdAsmp");
 			ssStat << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(to_string(m_AssumpReuseBacktrackLevelsSaved)) << " ";
 			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(" RTAsg");
-			ssStat << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(to_string(m_ReuseTrailAsssignments)) << " ";
-			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(" RTContr");
-			ssStat << print_as_color<IsColor ? ansi_color_code::green : ansi_color_code::none>(to_string(m_ReuseTrailContradictions)) << " ";
-
 
 			if (printHead) ssHead << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(" VSIDSInc VSIDSDecay");
 			ssStat << print_as_color<IsColor ? ansi_color_code::black : ansi_color_code::none>(to_string_scientific(m_VarActivityInc)) << " ";
@@ -135,6 +135,9 @@ namespace Topor
 		uint64_t m_ActiveLongLearntClss = 0;
 		// The number of active clauses
 		uint64_t GetActiveClss() const { return m_ActiveLongClss + m_ActiveBinaryClss; }
+		// The number of binary clauses ever added
+		uint64_t m_EverAddedBinaryClss = 0;
+
 
 		// The number of backtracks
 		uint64_t m_Backtracks = 0;
@@ -149,11 +152,7 @@ namespace Topor
 		uint64_t m_AssumpReuseBacktrackLevelsSaved = 0;
 		// The sum of all the levels at which a decision was taken
 		uint64_t m_SumOfAllDecLevels = 0;
-		// Assignments carried out as a result of reuse-trail
-		uint64_t m_ReuseTrailAsssignments = 0;
-		// Contradictions discovered during reuse-trail
-		uint64_t m_ReuseTrailContradictions = 0;
-
+		
 		// The number, capacity and sizes of the main buffer(s), containing the clauses, in bytes
 		TGetNum M_BGetNum = nullptr;
 		TGetNum M_BGetCap = nullptr;
@@ -211,6 +210,11 @@ namespace Topor
 		uint64_t m_LitsRemovedByAllUip = 0;
 		uint32_t m_AllUipAttempted = 0;
 		uint32_t m_AllUipSucceeded = 0;
+
+		// The number of inprocessings so far
+		uint32_t m_Ings = 0;
+		// The number of duplicate binary clauses, removed by inprocessing
+		uint32_t m_IngsDuplicateBinsRemoved = 0;
 	protected:
 		template <class T>
 		inline double Perc(T fraction, T total) const { return total == 0 ? 0. : (double)100. * (double)fraction / (double)total; }
@@ -223,6 +227,10 @@ namespace Topor
 				if (isLearnt && clsLen > 2)
 				{
 					++m_ActiveLongLearntClss;
+				}
+				if (clsLen == 2)
+				{
+					++m_EverAddedBinaryClss;
 				}
 			}
 		}

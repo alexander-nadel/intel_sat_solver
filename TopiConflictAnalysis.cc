@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -22,7 +22,7 @@ TUInd CTopi<TLit, TUInd, Compress>::AddClsToBufferAndWatch(const TSpanTULit cls,
 
 	if (cls.size() == 2)
 	{
-		if (m_ParamExistingBinWLStrat == 2 || !WLBinaryWatchExists(cls[0], cls[1]))
+		if (m_ParamExistingBinWLStrat >= 2 || !WLBinaryWatchExists(cls[0], cls[1]))
 		{
 			m_Stat.NewClause(cls.size(), isLearntNotForDeletion);
 			WLAddBinaryWatch(cls[0], cls[1]);
@@ -542,7 +542,7 @@ pair<typename CTopi<TLit, TUInd, Compress>::TSpanTULit, TUInd> CTopi<TLit, TUInd
 			ClsDelNewLearntOrGlueUpdate(longClsInd, oldGlue);
 		}
 
-		assert(NV(2) || !IsCbLearntOrDrat() || P("Deriving external clause for conflict " + to_string(m_Stat.m_Conflicts) + ": " + SLits(cls, true) + "\n"));
+		assert(NV(2) || !IsCbLearntOrDrat() || P("Deriving external clause for conflict " + to_string(m_Stat.m_Conflicts) + ": " + SLits(cls, true) + " 0\n"));
 	};
 
 	VisitCls(contradictingCls, contradictionInfo.m_IsContradictionInBinaryCls ? BadClsInd : contradictionInfo.m_ParentClsInd, false);
@@ -1164,6 +1164,7 @@ void CTopi<TLit, TUInd, Compress>::NewLearntClsApplyCbLearntDrat(const span<TULi
 				o << l << " ";
 			}
 			o << "0" << endl;
+			assert(NV(2) || P("New DRAT line: " + SLits(learntCls, true) + " 0\n"));
 		}
 	}
 

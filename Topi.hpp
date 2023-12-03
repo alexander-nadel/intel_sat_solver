@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #pragma once
@@ -234,8 +234,8 @@ namespace Topor
 		constexpr uint8_t InitEntriesPerWL() { return 4 >= TWatchInfo::BinsInLongBitCeil ? 4 : TWatchInfo::BinsInLongBitCeil; };
 		CTopiParam<uint8_t> m_ParamInitEntriesPerWL = { m_Params, "/bcp/init_entries_per_wl", "BCP: the number of initial entries in a watch list", InitEntriesPerWL(), TWatchInfo::BinsInLongBitCeil };
 		CTopiParam<uint8_t> m_ParamBCPWLChoice = { m_Params, "/bcp/wl_choice", "User clause processing: how to choose the watches -- 0: prefer shorter WL; 1: prefer longer WL; 2: disregard WL length", {0, 2, 0, 1, 0, 0, 1, 0, 0}, 0, 2 };
-		CTopiParam<uint8_t> m_ParamExistingBinWLStrat = { m_Params, "/bcp/existing_bin_wl_start", "BCP: what to do about duplicate binary clauses -- 0: nothing; 1: boost their VSIDS score; 2: add another copy to the watches", {1, 1, 1, 1, 2, 1, 1, 1, 1}, 0, 2 };
-		CTopiParam<double> m_ParamBinWLScoreBoostFactor = { m_Params, "/bcp/bin_wl_start_score_boost_factor", "BCP: if /bcp/existing_bin_wl_start=1, what's the factor for boosting the scores", {1., 1., 1., 1., 1., 1., 1., 0.5, 1.}, numeric_limits<double>::epsilon() };
+		CTopiParam<uint8_t> m_ParamExistingBinWLStrat = { m_Params, "/bcp/existing_bin_wl_start", "BCP: what to do about duplicate binary clauses -- 0: nothing; 1: boost their VSIDS score; 2: add another copy to the watches; 3: inprocessing (if on) to remove duplicates; 4: inprocessing (if on) to boost their VSIDS score", {1, 1, 1, 1, 2, 1, 1, 1, 1}, 0, 4 };
+		CTopiParam<double> m_ParamBinWLScoreBoostFactor = { m_Params, "/bcp/bin_wl_start_score_boost_factor", "BCP: if /bcp/existing_bin_wl_start=1 or 4, what's the factor for boosting the scores", {1., 1., 1., 1., 1., 1., 1., 0.5, 1.}, numeric_limits<double>::epsilon() };
 		CTopiParam<uint8_t> m_ParamBestContradictionStrat = { m_Params, "/bcp/best_contradiction_strat", "BCP's best contradiction strategy: 0: size; 1: glue; 2: first; 3: last", {0, 0, 0, 0, 0, 0, 0, 3, 0}, 0, 3 };
 
 		// Parameters: Add-user-clause
@@ -343,6 +343,13 @@ namespace Topor
 		CTopiParam<bool> m_ParamPhaseBoostFlippedForced = { m_Params, "/phase/boost_flipped_forced", "Phase management: boost the scores of forced variables, flipped by BCP?", false };
 		CTopiParam<uint8_t> m_ParamUpdateParamsWhenVarFixed = { m_Params, "/phase/update_params_when_var_fixed", "Phase management: update the parameters to pre-defined values, when fixed-only-once (1) or fixed-forever (2) or either (3)", {0, 0, 0, 0, 0, 0, 0, 0, 3}, 0, 3 };
 
+		// Parameters: inprocessing
+		CTopiParam<bool> m_ParamInprocessingOn = { m_Params, "/inprocessing/on", "Inprocessing: on or off", false };
+		CTopiParam<bool> m_ParamIngInvokeEveryQueryAfterInitPostpone = { m_Params, "/inprocessing/invoke_every_query_after_init_postpone", "Inprocessing: invoke right after every query after /inprocessing/postpone_first_inv_conflicts conflicts", true };
+		CTopiParam<uint32_t> m_ParamIngPostponeFirstInvConflicts = { m_Params, "/inprocessing/postpone_first_inv_conflicts", "Inprocessing: conflicts to postpone the very first inprocessing invocation", 0 };
+		CTopiParam<uint32_t> m_ParamIngConflictsBeforeNextInvocation = { m_Params, "/inprocessing/conflicts_before_next", "Inprocessing: conflicts before the next invocation", numeric_limits<uint32_t>::max() };
+		
+
 		void ReadAnyParamsFromFile();
 
 		/*
@@ -381,7 +388,6 @@ namespace Topor
 		CDynArray<TLit> m_I2ELitMap;		
 		inline TLit GetExternalLit(TULit iLit) const { assert(UseI2ELitMap());  return IsNeg(iLit) ? -m_I2ELitMap[GetVar(iLit)] : m_I2ELitMap[GetVar(iLit)]; }
 		bool UseI2ELitMap() const { return m_ParamVerifyDebugModelInvocation != 0 || IsCbLearntOrDrat() || M_ReportUnitCls != nullptr; }
-		void UpdateI2EMapIfRequired();		
 		static constexpr TLit ExternalLit2ExternalVar(TLit l) { return l > 0 ? l : -l; }
 		inline TULit E2I(TLit l) const
 		{
@@ -389,8 +395,6 @@ namespace Topor
 			const TULit internalL = m_E2ILitMap[externalV];
 			return l < 0 ? Negate(internalL) : internalL;
 		}
-
-		bool AssertI2EE2IMatch();
 	
 		// Used to make sure tautologies are discovered and duplicates are removed in new clauses
 		class CHandleNewCls;
@@ -2838,6 +2842,20 @@ protected:
 		std::function<void(unsigned id, int lit)> M_ReportUnitCls = nullptr;
 		std::function<int(unsigned threadId, bool reinit)> M_GetNextUnitClause = nullptr;
 
+		/*
+		* Inprocessing
+		*/
+
+		void InprocessIfRequired();
+		void IngRemoveBinaryWatchesIfRequired();
+		
+		// m_Stat.m_SolveInvs last time inprocessing was invoked
+		uint64_t m_IngLastSolveInv = 0;
+		// m_Stat.m_Conflicts last time inprocessing was invoked
+		uint64_t m_IngLastConflicts = 0;
+		// m_Stat.m_EverAddedBinaryClss last time inprocessing was invoked
+		uint64_t m_IngLastEverAddedBinaryClss = 0;
+		
 		/*
 		* Debugging
 		* The printing functions print out some useful info and return true (to be used inside assert statements)

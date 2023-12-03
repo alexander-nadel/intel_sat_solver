@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -390,8 +390,7 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	assert(m_ParamAssertConsistency < 1 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || TrailAssertConsistency());
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(true));
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || DebugAssertWaste());
-	assert(AssertI2EE2IMatch());
-
+	
 	CApplyFuncOnExitFromScope<> onExit([&]()
 	{
 		m_LastGloballySatisfiedLitAfterSimplify = m_TrailLastVarPerDecLevel[0];
@@ -1045,10 +1044,6 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	ReserveVarAndLitData();
 
 	m_Stat.UpdateMaxInternalVar(m_LastExistingVar);
-
-	UpdateI2EMapIfRequired();
-
-	assert(AssertI2EE2IMatch());
 
 	m_VsidsHeap.rebuild();
 

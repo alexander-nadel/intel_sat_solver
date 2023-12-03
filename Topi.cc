@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include <functional>
@@ -297,6 +297,17 @@ void CTopi<TLit, TUInd, Compress>::HandleIncomingUserVar(TLit v, bool isUndoable
 	if (m_E2ILitMap[v] == 0)
 	{
 		m_E2ILitMap[v] = GetLit(++m_LastExistingVar, false);
+		if (UseI2ELitMap())
+		{
+			m_I2ELitMap.reserve_atleast(m_LastExistingVar + 1, 0);
+			if (unlikely(m_I2ELitMap.uninitialized_or_erroneous()))
+			{
+				SetStatus(TToporStatus::STATUS_ALLOC_FAILED, "HandleIncomingUserVar: couldn't reserve m_I2ELitMap");
+				return;
+			}
+			m_I2ELitMap[m_LastExistingVar] = v;
+		}
+
 		m_Stat.UpdateMaxInternalVar(m_LastExistingVar);
 
 		if (!isUndoable)
@@ -928,23 +939,6 @@ void CTopi<TLit, TUInd, Compress>::HandleAssumptions(const span<TLit> userAssump
 }
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit, TUInd, Compress>::UpdateI2EMapIfRequired()
-{
-	if (UseI2ELitMap())
-	{
-		for (TLit externalVar = 1; externalVar <= m_Stat.m_MaxUserVar; ++externalVar)
-		{
-			assert(externalVar < (TLit)m_E2ILitMap.cap() && GetVar(m_E2ILitMap[externalVar]) < m_I2ELitMap.cap());
-			const auto iLit = m_E2ILitMap[externalVar];
-			if (iLit != BadULit)
-			{
-				assert(IsPos(iLit) || IsGloballyAssigned(iLit));
-				m_I2ELitMap[GetVar(iLit)] = IsAssigned(iLit) && IsGloballyAssigned(iLit) && IsAssignedNegated(iLit) ? -externalVar : externalVar;
-			}			
-		}
-	}
-}
-template <typename TLit, typename TUInd, bool Compress>
 TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps, pair<double, bool> toInSecIsCpuTime, uint64_t confThr)
 {
 	if (m_DumpFile)
@@ -1137,8 +1131,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 	RestartInit();
 	DecisionInit();
 	BacktrackingInit();
-	UpdateI2EMapIfRequired();
-
+	
 	if (unlikely(IsUnrecoverable())) return trv = UnrecStatusToRetVal();
 	assert(m_ParamAssertConsistency < 2 || m_Stat.m_Conflicts < (uint64_t)m_ParamAssertConsistencyStartConf || WLAssertConsistency(false));
 
@@ -1222,6 +1215,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		}
 		if (unlikely(IsUnrecoverable() || m_Status == TToporStatus::STATUS_USER_INTERRUPT)) return trv = StatusToRetVal();
 
+		InprocessIfRequired();
 		SimplifyIfRequired();
 		DeleteClausesIfRequired();
 		CompressBuffersIfRequired();
@@ -1523,6 +1517,7 @@ void CTopi<TLit, TUInd, Compress>::SetMultipliers()
 	m_AssignmentInfo.SetMultiplier(m_ParamMultVars);
 	m_VarInfo.SetMultiplier(m_ParamMultVars);
 	m_E2ILitMap.SetMultiplier(m_ParamMultVars);
+	if (UseI2ELitMap()) m_I2ELitMap.SetMultiplier(m_ParamMultVars);
 	m_Watches.SetMultiplier(m_ParamMultVars);
 	m_HandleNewUserCls.SetMultiplier(m_ParamMultVars);
 	m_VsidsHeap.set_multiplier(m_ParamMultVars);

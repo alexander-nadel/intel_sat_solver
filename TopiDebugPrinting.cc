@@ -1,4 +1,4 @@
-// Copyright(C) 2021-2022 Intel Corporation
+// Copyright(C) 2021-2023 Intel Corporation
 // SPDX - License - Identifier: MIT
 
 #include "Topi.hpp"
@@ -55,39 +55,6 @@ string CTopi<TLit, TUInd, Compress>::SE2I()
 
 	return ss.str();
 }
-
-template <typename TLit, typename TUInd, bool Compress>
-bool  CTopi<TLit, TUInd, Compress>::AssertI2EE2IMatch()
-{
-	if (UseI2ELitMap())
-	{
-		for (TLit externalLit = 1; externalLit < (TLit)m_E2ILitMap.cap(); ++externalLit)
-		{
-			const TULit internalLit = m_E2ILitMap[externalLit];
-			if (internalLit == 0)
-			{
-				continue;
-			}
-			const bool isPos = IsPos(internalLit);
-			const bool isGloballyAssigned = IsAssigned(internalLit) && IsGloballyAssigned(internalLit);
-			assert(isPos || isGloballyAssigned);
-
-			const TUVar internalVar = GetVar(internalLit);
-			const TLit expectedExternalLitOfInternalVar = m_I2ELitMap[internalVar];
-
-			if (!isGloballyAssigned)
-			{
-				if (expectedExternalLitOfInternalVar != externalLit)
-				{
-					assert(0);
-					return false;
-				}
-			}		
-		}
-	}
-	return true;
-}
-
 
 template <typename TLit, typename TUInd, bool Compress>
 string CTopi<TLit, TUInd, Compress>::STrail()
