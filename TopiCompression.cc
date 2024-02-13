@@ -16,17 +16,17 @@ void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
 	if (m_PolarityInfoActivated) ReserveExactly(m_PolarityInfo, GetNextVar(), 0, "m_PolarityInfo in ReserveVarAndLitData");
 	ReserveExactly(m_VarInfo, GetNextVar(), 0, "m_VarInfo in ReserveVarAndLitData");
 	ReserveExactly(m_ToPropagate, GetNextVar(), "m_ToPropagate in ReserveVarAndLitData");
-	ReserveExactly(m_TrailLastVarPerDecLevel, GetNextVar(), BadUVar, "m_TrailLastVarPerDecLevel in ReserveVarAndLitData");
+	ReserveExactly(m_TrailLastVarPerDecLevel, GetNextVar() + 1, BadUVar, "m_TrailLastVarPerDecLevel in ReserveVarAndLitData");
 	ReserveExactly(m_VsidsHeap, GetNextVar(), "m_VsidsHeap in ReserveVarAndLitData");
 	ReserveExactly(m_HandyLitsClearBefore[0], GetNextVar(), "m_HandyLitsCleanBefore[0] in ReserveVarAndLitData");
 	if (m_ParamFlippedRecordingMaxLbdToRecord != 0) ReserveExactly(m_HandyLitsClearBefore[1], GetNextVar(), "m_HandyLitsCleanBefore[1] in ReserveVarAndLitData");
 	ReserveExactly(m_VisitedVars, GetNextVar(), "m_VisitedVars in ReserveVarAndLitData");
-	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar(), 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
+	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar() + 1, 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
 	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), 0, "m_I2ELitMap in ReserveVarAndLitData");
 	if (IsCbLearntOrDrat()) ReserveExactly(m_UserCls, GetNextVar(), "m_UserCls in ReserveVarAndLitData");
 	if (m_ParamOnTheFlySubsumptionParentMinGlueToDisable > 0) ReserveExactly(m_CurrClsCounters, GetNextVar(), 0, "m_CurrClsCounters in ReserveVarAndLitData");
-	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, GetNextVar(), 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
-	if (m_ParamCustomBtStratInit > 0 || m_ParamCustomBtStratS > 0 || m_ParamCustomBtStratN > 0) ReserveExactly(m_BestScorePerDecLevel, GetNextVar(), 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
+	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, GetNextVar() + 1, 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
+	if (m_ParamCustomBtStratInit > 0 || m_ParamCustomBtStratS > 0 || m_ParamCustomBtStratN > 0) ReserveExactly(m_BestScorePerDecLevel, GetNextVar() + 1, 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
 	ReserveExactly(m_HandleNewUserCls, GetNextVar(), "m_HandleNewUserCls in ReserveVarAndLitData");
 }
 
