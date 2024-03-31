@@ -11,22 +11,24 @@ using namespace std;
 template <typename TLit, typename TUInd, bool Compress>
 void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
 {
+	// To surely take any collapsed decision levels into account 
+	const auto perDecLevelAlloc = GetNextVar() + 1 + m_Assumps.cap();
 	ReserveExactly(m_Watches, GetNextLit(), 0, "m_Watches in ReserveVarAndLitData");
 	ReserveExactly(m_AssignmentInfo, GetNextVar(), 0, "m_AssignmentInfo in ReserveVarAndLitData");
 	if (m_PolarityInfoActivated) ReserveExactly(m_PolarityInfo, GetNextVar(), 0, "m_PolarityInfo in ReserveVarAndLitData");
 	ReserveExactly(m_VarInfo, GetNextVar(), 0, "m_VarInfo in ReserveVarAndLitData");
 	ReserveExactly(m_ToPropagate, GetNextVar(), "m_ToPropagate in ReserveVarAndLitData");
-	ReserveExactly(m_TrailLastVarPerDecLevel, GetNextVar() + 1, BadUVar, "m_TrailLastVarPerDecLevel in ReserveVarAndLitData");
+	ReserveExactly(m_TrailLastVarPerDecLevel, perDecLevelAlloc, BadUVar, "m_TrailLastVarPerDecLevel in ReserveVarAndLitData");
 	ReserveExactly(m_VsidsHeap, GetNextVar(), "m_VsidsHeap in ReserveVarAndLitData");
 	ReserveExactly(m_HandyLitsClearBefore[0], GetNextVar(), "m_HandyLitsCleanBefore[0] in ReserveVarAndLitData");
 	if (m_ParamFlippedRecordingMaxLbdToRecord != 0) ReserveExactly(m_HandyLitsClearBefore[1], GetNextVar(), "m_HandyLitsCleanBefore[1] in ReserveVarAndLitData");
 	ReserveExactly(m_VisitedVars, GetNextVar(), "m_VisitedVars in ReserveVarAndLitData");
-	ReserveExactly(m_DecLevelsLastAppearenceCounter, GetNextVar() + 1, 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
+	ReserveExactly(m_DecLevelsLastAppearenceCounter, perDecLevelAlloc, 0, "m_DecLevelsLastAppearenceCounter in ReserveVarAndLitData");
 	if (UseI2ELitMap()) ReserveExactly(m_I2ELitMap, GetNextVar(), 0, "m_I2ELitMap in ReserveVarAndLitData");
 	if (IsCbLearntOrDrat()) ReserveExactly(m_UserCls, GetNextVar(), "m_UserCls in ReserveVarAndLitData");
 	if (m_ParamOnTheFlySubsumptionParentMinGlueToDisable > 0) ReserveExactly(m_CurrClsCounters, GetNextVar(), 0, "m_CurrClsCounters in ReserveVarAndLitData");
-	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, GetNextVar() + 1, 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
-	if (m_ParamCustomBtStratInit > 0 || m_ParamCustomBtStratS > 0 || m_ParamCustomBtStratN > 0) ReserveExactly(m_BestScorePerDecLevel, GetNextVar() + 1, 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
+	if (m_ParamRestartStrategyInit == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyS == RESTART_STRAT_NUMERIC || m_ParamRestartStrategyN == RESTART_STRAT_NUMERIC) ReserveExactly(m_RstNumericLocalConfsSinceRestartAtDecLevelCreation, perDecLevelAlloc, 0, "m_RstArithLocalConfsSinceRestartAtDecLevelCreation in ReserveVarAndLitData");
+	if (m_ParamCustomBtStratInit > 0 || m_ParamCustomBtStratS > 0 || m_ParamCustomBtStratN > 0) ReserveExactly(m_BestScorePerDecLevel, perDecLevelAlloc, 0, "m_ParamCustomBtStrat in ReserveVarAndLitData");
 	ReserveExactly(m_HandleNewUserCls, GetNextVar(), "m_HandleNewUserCls in ReserveVarAndLitData");
 }
 
@@ -915,6 +917,47 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 		return;
 	}
 
+	if (m_Assumps.cap() > 0)
+	{
+		assert(all_of(m_Assumps.get_span_cap().begin(), m_Assumps.get_span_cap().end(), [&](TULit assumpLit) { return IsSatisfied(assumpLit); }));
+		for (size_t assumpI = 0; assumpI < m_Assumps.cap(); ++assumpI)
+		{
+			const TULit lAssump = m_Assumps[assumpI];
+			assert(lAssump != BadULit);
+			const TUVar vAssump = GetVar(lAssump);
+			TAssignmentInfo& ai = m_AssignmentInfo[vAssump];
+
+			auto RemoveAssump = [&]()
+			{
+				if (m_ParamAssumpsSimpAllowReorder)
+				{
+					m_Assumps[assumpI--] = m_Assumps[m_Assumps.cap() - 1];
+					m_Assumps.reserve_exactly(m_Assumps.cap() - 1);
+				}
+				else
+				{
+					m_Assumps[assumpI] = BadULit;
+				}
+			};
+
+			if (IsGloballyAssigned(lAssump))
+			{
+				assert(IsSatisfied(lAssump));
+				RemoveAssump();
+			}
+		}
+
+		if (!m_ParamAssumpsSimpAllowReorder)
+		{
+			m_Assumps.remove_if_equal_and_cut_capacity(BadULit);
+		}
+
+		if (IsAssumpVar(globallySatifiedVarLowestIndex))
+		{
+			m_AssignmentInfo[globallySatifiedVarLowestIndex].m_IsAssump = false;
+		}
+	}
+
 	// Sift the indices
 	assert(m_HandyLitsClearBefore[0].cap() - 1 == m_LastExistingVar);
 	for (; m_LastExistingVar != newLastExistingVar; --m_LastExistingVar)
@@ -1008,8 +1051,6 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	{
 		TSpanTULit assumpSpan = m_Assumps.get_span_cap();
 
-		assert(all_of(assumpSpan.begin(), assumpSpan.end(), [&](TULit assumpLit) { return !IsFalsified(assumpLit); }));
-
 		transform(assumpSpan.begin(), assumpSpan.end(), assumpSpan.begin(), [&](TULit assumpLit)
 		{
 			return RetSiftedLit(assumpLit);
@@ -1017,6 +1058,8 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 
 		auto endUniquesIt = unique(assumpSpan.begin(), assumpSpan.end());
 		m_Assumps.reserve_exactly(endUniquesIt - assumpSpan.begin());
+
+		assert(all_of(assumpSpan.begin(), assumpSpan.end(), [&](TULit assumpLit) { return IsSatisfied(assumpLit) && IsAssump(assumpLit); }));
 	}
 
 	auto RemovedLit2NewLit = [&](TULit l)
