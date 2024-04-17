@@ -135,6 +135,12 @@ uint64_t CTopor<TLit, TUInd, Compress>::GetAssumpReuseBacktrackLevelsSaved() con
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopor<TLit, TUInd, Compress>::GetPropagations() const
+{
+	return m_Topi->GetPropagations();
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 TLit CTopor<TLit, TUInd, Compress>::GetMaxInternalVar() const
 {
 	return m_Topi->GetMaxInternalVar();

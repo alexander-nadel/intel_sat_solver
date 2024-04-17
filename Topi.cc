@@ -1406,6 +1406,12 @@ uint64_t CTopi<TLit, TUInd, Compress>::GetBacktracks() const
 }
 
 template <typename TLit, typename TUInd, bool Compress>
+uint64_t CTopi<TLit, TUInd, Compress>::GetPropagations() const
+{
+	return m_Stat.m_Implications;
+}
+
+template <typename TLit, typename TUInd, bool Compress>
 uint64_t CTopi<TLit, TUInd, Compress>::GetAssumpReuseBacktrackLevelsSaved() const
 {
 	return m_Stat.m_AssumpReuseBacktrackLevelsSaved;

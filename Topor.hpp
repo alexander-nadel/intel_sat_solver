@@ -103,7 +103,9 @@ namespace Topor
 		// Get the number of backtracks
 		uint64_t GetBacktracks() const;
 		// The number of backtrack levels, saved by reusing assumptions
-		uint64_t GetAssumpReuseBacktrackLevelsSaved() const;		
+		uint64_t GetAssumpReuseBacktrackLevelsSaved() const;	
+		// Get the  number of propagations (implications)
+		uint64_t GetPropagations() const;
 
 		// Is there an error in the solver?
 		bool IsError() const;

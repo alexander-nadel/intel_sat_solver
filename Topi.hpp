@@ -73,6 +73,7 @@ namespace Topor
 		uint64_t GetActiveLongLearntClss() const;
 		uint64_t GetBacktracks() const;
 		uint64_t GetAssumpReuseBacktrackLevelsSaved() const;
+		uint64_t GetPropagations() const;
 		
 		std::vector<TToporLitVal> GetModel() const;
 		TToporStatistics<TLit, TUInd> GetStatistics() const;		
