@@ -1126,7 +1126,7 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 	}
 
 	ReserveExactly(m_E2ILitMap, m_Stat.m_MaxUserVar + 1, "m_E2IVarMap in Solve");
-	ReserveVarAndLitData();
+	ReserveVarAndLitData(userAssumps.size() - (userAssumps.size() > 0 && userAssumps.back() == 0));
 	ClsDeletionInit();
 	RestartInit();
 	DecisionInit();
@@ -1239,7 +1239,8 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		ConflictAnalysisLoop(contradictionInfo);
 		if (unlikely(IsUnrecoverable())) return trv = StatusToRetVal();
 
-		if (!contradictionInfo.IsContradiction() && (m_EarliestFalsifiedAssump == BadULit || !IsAssigned(m_EarliestFalsifiedAssump)) && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
+		// The earliest falsified assumption might be assigned&satisfied in the corner case of a reimplication in BCP
+		if (!contradictionInfo.IsContradiction() && (m_EarliestFalsifiedAssump == BadULit || !IsFalsified(m_EarliestFalsifiedAssump)) && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
 		{
 			m_EarliestFalsifiedAssump = BadULit;
 			HandleAssumptionsIfBacktrackedBeyondThem();

@@ -2598,7 +2598,7 @@ protected:
 		* Compression, simplification, deletion,  (of the clause buffer, the watch buffer, the literals)
 		*/
 
-		void ReserveVarAndLitData();
+		void ReserveVarAndLitData(size_t maxAssumps);
 		void MoveVarAndLitData(TUVar vFrom, TUVar vTo);
 		void RemoveVarAndLitData(TUVar v);
 

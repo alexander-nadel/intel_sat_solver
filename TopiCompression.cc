@@ -9,10 +9,10 @@ using namespace Topor;
 using namespace std;
 
 template <typename TLit, typename TUInd, bool Compress>
-void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData()
+void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData(size_t maxAssumps)
 {
 	// To surely take any collapsed decision levels into account 
-	const auto perDecLevelAlloc = GetNextVar() + 1 + m_Assumps.cap();
+	const auto perDecLevelAlloc = GetNextVar() + 1 + maxAssumps;
 	ReserveExactly(m_Watches, GetNextLit(), 0, "m_Watches in ReserveVarAndLitData");
 	ReserveExactly(m_AssignmentInfo, GetNextVar(), 0, "m_AssignmentInfo in ReserveVarAndLitData");
 	if (m_PolarityInfoActivated) ReserveExactly(m_PolarityInfo, GetNextVar(), 0, "m_PolarityInfo in ReserveVarAndLitData");
@@ -924,8 +924,6 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 		{
 			const TULit lAssump = m_Assumps[assumpI];
 			assert(lAssump != BadULit);
-			const TUVar vAssump = GetVar(lAssump);
-			TAssignmentInfo& ai = m_AssignmentInfo[vAssump];
 
 			auto RemoveAssump = [&]()
 			{
@@ -1084,7 +1082,7 @@ void CTopi<TLit, TUInd, Compress>::SimplifyIfRequired()
 	assert(NV(2) || P("E2I after: " + SE2I() + "\n"));
 
 	// This function will shrink all the variable- and literal-dependent data structures
-	ReserveVarAndLitData();
+	ReserveVarAndLitData(m_DecLevel);
 
 	m_Stat.UpdateMaxInternalVar(m_LastExistingVar);
 
