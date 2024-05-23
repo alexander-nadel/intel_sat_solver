@@ -301,7 +301,7 @@ namespace Topor
 		// Parameters: buffer multipliers
 		inline bool IsMultiplierParam(const string& paramName) const { return paramName == "/multiplier/clauses" || paramName == "/multiplier/variables" || paramName == "/multiplier/watches_if_separate"; }
 		CTopiParam<double> m_ParamMultClss = { m_Params, "/multiplier/clauses", "The multiplier for reallocating the clause buffer", CDynArray<TUV>::MultiplierDef, 1. };
-		CTopiParam<double> m_ParamMultVars = { m_Params, "/multiplier/variables", "The multiplier for reallocating data structures, indexed by variables (and literals)", 1., 1. };
+		CTopiParam<double> m_ParamMultVars = { m_Params, "/multiplier/variables", "The multiplier for reallocating data structures, indexed by variables (and literals)", 1.33, 1. };
 		CTopiParam<double> m_ParamMultWatches = { m_Params, "/multiplier/watches", "The multiplier for reallocating the watches buffer", 1.33, 1. };
 		CTopiParam<double> m_ParamMultWasteWatches = { m_Params, "/multiplier/watches_waste", "The multiplier for triggering reallocation of the watches buffer, when there is too much waste", 1.33, 1. };
 
