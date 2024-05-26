@@ -4,6 +4,7 @@
 #include "Topi.hpp"
 #include "SetInScope.h"
 #include <unordered_set>
+#include <algorithm>
 
 using namespace Topor;
 using namespace std;
@@ -11,8 +12,9 @@ using namespace std;
 template <typename TLit, typename TUInd, bool Compress>
 void CTopi<TLit, TUInd, Compress>::ReserveVarAndLitData(size_t maxAssumps)
 {
-	// To surely take any collapsed decision levels into account 
-	const auto perDecLevelAlloc = GetNextVar() + 1 + maxAssumps;
+	// To surely take into account: (1) any collapsed decision levels + 
+	// (2) the current decision level (which might still be greater than GetNextVar() + maxAssumps because of the previous call with potentially more assumptions)
+	const auto perDecLevelAlloc = std::max((size_t)GetNextVar() + (size_t)maxAssumps, (size_t)m_DecLevel) + 1;
 	ReserveExactly(m_Watches, GetNextLit(), 0, "m_Watches in ReserveVarAndLitData");
 	ReserveExactly(m_AssignmentInfo, GetNextVar(), 0, "m_AssignmentInfo in ReserveVarAndLitData");
 	if (m_PolarityInfoActivated) ReserveExactly(m_PolarityInfo, GetNextVar(), 0, "m_PolarityInfo in ReserveVarAndLitData");
@@ -1276,6 +1278,10 @@ void CTopi<TLit, TUInd, Compress>::CompressBuffersIfRequired()
 		{
 			m_B.reserve_exactly((size_t)((double)m_BNext * m_ParamMultClss));
 			if (unlikely(IsUnrecoverable())) return;
+		}
+		if (unlikely(m_FirstLearntClsInd != numeric_limits<decltype(m_FirstLearntClsInd)>::max() && m_FirstLearntClsInd >= m_BNext))
+		{
+			m_FirstLearntClsInd = numeric_limits<decltype(m_FirstLearntClsInd)>::max();
 		}
 	}
 	else
