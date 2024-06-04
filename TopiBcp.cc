@@ -544,7 +544,9 @@ bool CTopi<TLit, TUInd, Compress>::ProcessDelayedImplication(TULit diL, TULit ot
 		{
 			TULit cachedLit = *currLongWatchPtr;
 			const TUInd clsInd = *(TUInd*)(currLongWatchPtr + 1);
-
+			
+			assert(NV(2) || P("ProcessDelayedImplication: visiting long clause " + HexStr(*(TUInd*)(currLongWatchPtr + 1)) + ": cached " + SLit(cachedLit) + "; clause: " + SLits(Cls(*(TUInd*)(currLongWatchPtr + 1))) + "\n"));
+			
 			// Some extra-care must be taken if the literal hasn't been fully propagated
 			// There might be a satisfied literal, which is not yet cached
 			if (IsVisited(diL) && !IsSatisfied(cachedLit))

@@ -1305,12 +1305,23 @@ void CTopi<TLit, TUInd, Compress>::CompressBuffersIfRequired()
 	}
 
 	// Will now update all the clause indices
-
 	auto AddLongWatchLocal = [&](bool watchInd, TUInd clsInd)
 	{
 		const auto cls = ConstClsSpan(clsInd, 2);
 		const TULit currLit = cls[watchInd];
-		const TULit inlinedLit = cls[!watchInd];
+		TULit inlinedLit = cls[!watchInd];
+		if (IsFalsified(currLit) && !(IsSatisfied(inlinedLit) && GetAssignedDecLevel(inlinedLit) <= GetAssignedDecLevel(currLit)))
+		{
+			const auto clsFull = ConstClsSpan(clsInd);
+			const auto currLitDecLevel = GetAssignedDecLevel(currLit);
+			auto visitedLitIt = find_if(clsFull.begin() + 2, clsFull.end(), [&](const TULit visitedLit)
+			{
+				return IsSatisfied(visitedLit) && GetAssignedDecLevel(visitedLit) <= currLitDecLevel;
+			});
+			assert(visitedLitIt != clsFull.end());
+			inlinedLit = *visitedLitIt;
+		}
+		
 		TWatchInfo& wi = m_Watches[currLit];
 		TULit* watchArena = m_W.get_ptr(wi.m_WBInd);
 		auto indBeyondLongWatches = wi.GetLongEntries();
