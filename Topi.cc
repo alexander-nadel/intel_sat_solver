@@ -1632,7 +1632,7 @@ string Topor::CTopi<TLit, TUInd, Compress>::GetMemoryLayout() const
 	name2Mb["m_ToPropagate"] = m_ToPropagate.memMb();
 	name2Mb["m_Cis"] = m_Cis.memMb();
 	name2Mb["m_Dis"] = m_Dis.memMb();
-	name2Mb["m_VarsParentSubsumed"] = m_VarsParentSubsumed.memMb();
+	name2Mb["m_VarsParentSubsumed"] = memMb(m_VarsParentSubsumed);
 	name2Mb["m_HandyLitsClearBefore"] = m_HandyLitsClearBefore[0].memMb() + m_HandyLitsClearBefore[1].memMb();
 	name2Mb["m_VisitedVars"] = m_VisitedVars.memMb();
 	name2Mb["m_RootedVars"] = m_RootedVars.memMb();

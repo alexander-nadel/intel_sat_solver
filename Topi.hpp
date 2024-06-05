@@ -49,6 +49,30 @@ namespace Topor
 		ss << setfill('0') << setw(width) << hex << (val | 0);
 		return ss.str();
 	}
+	
+	template <typename T>
+	inline size_t memMb(const vector<T>& v)
+	{
+		return v.size() * sizeof(T) / 1000;
+	}
+
+	template <typename TKey, typename TVal>
+	inline size_t memMb(const unordered_map<TKey, TVal>& m)
+	{
+		return m.size() * (sizeof(TKey) + sizeof(TVal)) / 1000;
+	}
+
+	using TCompressedClss = unordered_map<uint16_t, CBitArray>;
+	inline size_t memMb(const TCompressedClss& bc)
+	{
+		auto res = bc.size() * sizeof(uint16_t);
+		for (auto& i : bc)
+		{
+			res += i.second.memMb();
+		}
+
+		return res;
+	}
 
 	// The main solver class
 	template <typename TLit, typename TUInd, bool Compress>
@@ -2497,7 +2521,20 @@ protected:
 		void OnBadDratFile();
 		void NewLearntClsApplyCbLearntDrat(const span<TULit> learntCls);
 
-		CVector<TUVar> m_VarsParentSubsumed;
+		struct TParentSubsumed
+		{
+			TParentSubsumed(TULit l, bool isBinary, TUInd parentClsInd) : m_L(l), m_IsBinary(isBinary), m_ParentClsInd(parentClsInd) {}
+			TULit m_L;
+			bool m_IsBinary;
+			union
+			{
+				// Parent clause for longs
+				TUInd m_ParentClsInd;
+				// The other literal in the clause for binaries
+				TULit m_BinOtherLit;
+			};
+		};
+		vector<TParentSubsumed> m_VarsParentSubsumed;
 		
 		// An array of vectors of literals for various algorithms (which must cleaned up *before* every usage) 
 		// The capacity, assigned at the beginning of Solve, is the number of variables
