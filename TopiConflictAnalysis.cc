@@ -1336,9 +1336,9 @@ void CTopi<TLit, TUInd, Compress>::ConflictAnalysisLoop(TContradictionInfo& cont
 					}
 					else
 					{
-						assert(NP(2) || P("Before on-the-fly subsumption deleted the pivot " + SVar(v) + " from the long parent " + HexStr(m_VarInfo[v].m_ParentClsInd) + "; clause: " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
+						assert(NV(2) || P("Before on-the-fly subsumption deleted the pivot " + SVar(v) + " from the long parent " + HexStr(m_VarInfo[v].m_ParentClsInd) + "; clause: " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
 						DeleteLitFromCls(m_VarInfo[v].m_ParentClsInd, GetLit(v, m_AssignmentInfo[v].m_IsNegated));
-						assert(NP(2) || P("After on-the-fly subsumption deleted the pivot " + SVar(v) + " from the long parent " + HexStr(m_VarInfo[v].m_ParentClsInd) + "; clause: " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
+						assert(NV(2) || P("After on-the-fly subsumption deleted the pivot " + SVar(v) + " from the long parent " + HexStr(m_VarInfo[v].m_ParentClsInd) + "; clause: " + SLits(Cls(m_VarInfo[v].m_ParentClsInd)) + "\n"));
 						AdditionalAssign(Cls(m_VarInfo[v].m_ParentClsInd), m_VarInfo[v].m_ParentClsInd);
 					}
 					m_Stat.m_LitsRemovedByConfSubsumption++;
