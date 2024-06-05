@@ -250,8 +250,8 @@ CTopi<TLit, TUInd, Compress>::TContradictionInfo CTopi<TLit, TUInd, Compress>::B
 		{
 			TULit& cachedLit = *currLongWatchPtr;
 
-			assert(NV(2) || P("Visiting long clause: cached " + SLit(cachedLit) + "; clause: " + SLits(Cls(*(TUInd*)(currLongWatchPtr + 1))) + "\n"));
-
+			assert(NV(2) || P("BCP: visiting long clause " + HexStr(*(TUInd*)(currLongWatchPtr + 1)) + ": cached " + SLit(cachedLit) + "; clause: " + SLits(Cls(*(TUInd*)(currLongWatchPtr + 1))) + "\n"));
+			
 			if (IsSatisfied(cachedLit) && GetAssignedDecLevel(cachedLit) <= lDecLevel)
 			{
 				// The cached literal is satisfied at decision level not higher than the current watch, we can continue without visiting the clause!
