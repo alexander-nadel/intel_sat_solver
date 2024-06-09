@@ -149,25 +149,27 @@ void CTopi<TLit, TUInd, Compress>::MinimizeClauseBin(CVector<TULit>& cls)
 	});
 
 	TWatchInfo& wi = m_Watches[cls[0]];
-	TSpanTULit binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
-	bool someMarked = false;
-	for (TULit l : binWatches)
+	if (wi.m_BinaryWatches != 0)
 	{
-		if (IsSatisfied(l))
+		TSpanTULit binWatches = m_W.get_span_cap(wi.m_WBInd + wi.GetLongEntries(), wi.m_BinaryWatches);
+		bool someMarked = false;
+		for (TULit l : binWatches)
 		{
-			someMarked = true;
-			MarkRooted(l);
+			if (IsSatisfied(l))
+			{
+				someMarked = true;
+				MarkRooted(l);
+			}
+		}
+
+		if (someMarked)
+		{
+			cls.erase_if_may_reorder([&](TULit l)
+			{
+				return IsRooted(l);
+			}, 1);
 		}
 	}
-
-	if (someMarked)
-	{
-		cls.erase_if_may_reorder([&](TULit l)
-		{
-			return IsRooted(l);
-		}, 1);
-	}
-
 	assert(NV(2) || P("Minimize-clause-binary finish; " + (cls.size() == clsSizeBefore ? "couldn't minimize" : "minimized and saved " + to_string(clsSizeBefore - cls.size()) + " literals") + ": " + SLits(cls.get_const_span()) + "\n"));
 }
 
