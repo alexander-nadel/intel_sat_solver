@@ -772,17 +772,16 @@ template <typename TLit, typename TUInd, bool Compress>
 size_t CTopi<TLit, TUInd, Compress>::FindFirstUnassignedAssumpIndex(size_t indexBeyondHandledAssumps)
 {
 	assert(indexBeyondHandledAssumps <= m_Assumps.cap());
-	auto firstUnassignedAssumpInd = indexBeyondHandledAssumps;
-	TUVar prevDecVar = m_DecLevel == 0 ? BadUVar : GetDecVar(m_DecLevel);
-	for (size_t assumpI = indexBeyondHandledAssumps - 1; assumpI != (size_t)-1 && GetVar(m_Assumps[assumpI]) != prevDecVar; --assumpI)
+	for (size_t assumpI = 0; assumpI < indexBeyondHandledAssumps; ++assumpI)
 	{
 		const TULit lAssump = m_Assumps[assumpI];
 		if (!IsAssigned(lAssump))
 		{
-			firstUnassignedAssumpInd = assumpI;
+			return assumpI;
 		}
 	}
-	return firstUnassignedAssumpInd;
+
+	return indexBeyondHandledAssumps;
 }
 
 template <typename TLit, typename TUInd, bool Compress>
