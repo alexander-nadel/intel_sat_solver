@@ -169,7 +169,7 @@ int OnFinishingSolving(TTopor& topor, TToporReturnVal ret, bool printModel, bool
 		return BadRetVal;
 	case Topor::TToporReturnVal::RET_CONFLICT_OUT:
 		cout << "s CONFLICT_OUT" << endl;
-		return BadRetVal;
+		return 30;
 	case Topor::TToporReturnVal::RET_MEM_OUT:
 		cout << "s MEMORY_OUT" << endl;
 		return BadRetVal;
