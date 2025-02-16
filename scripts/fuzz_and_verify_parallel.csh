@@ -4,7 +4,7 @@ set sleeps = 60
 
 if ($#argv < 1) then
     echo "Fuzz and verify IntelSAT in parallel, given (1) the IntelSAT executable, (2) the number of threads, and (3-) optional input parameters."
-    echo "Usage: <threads_num> <intel_sat_executable> [additional parameters]"
+    echo "Usage: <intel_sat_executable> <threads_num> [additional parameters]"
     echo "It is recommended to run the script with at least 8 threads to test all (current) 8 modes of IntelSAT."
     echo "Additionally, running it in parallel for both the release and debug versions of IntelSAT is recommended for robustness."
     echo "The script periodically (every minute) prints the latest outputs of every executed thread. If everything is Ok, you should see no errors, and the numbers indicating the current invocation number of every thread are expected to increase."
