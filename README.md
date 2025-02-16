@@ -10,3 +10,6 @@ When using IntelSAT, please refer to the following paper:
 
 Alexander Nadel. "Introducing Intel(R) SAT Solver", SAT'22.
 
+The "scripts" directory contains useful scripts for verifying, fuzzying and delta-debugging IntelSAT. Please refer to "scripts/README" for further details.
+The "third_party" directory contains third-party tools applied by the scripts in "scripts" directory for verifying, fuzzying and delta-debugging IntelSAT. Please refer to "third-party/README" and "third-party/LICENSE" for further details.
+

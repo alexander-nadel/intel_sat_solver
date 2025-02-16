@@ -1,0 +1,27 @@
+----------------------------------------------------------------------
+This is the 2013 edition of:
+
+cnfdd.c - delta debugger for CNFs in DIMACS format
+cnfuzz.c - fuzzer for CNFs in DIMACS format
+
+They both should be 64-bit clean, support QDIMACS, and option
+fuzzing respectively delta debugging (see also our TAP'13 paper).
+
+There was no change to:
+
+mtcnfdd.c - multithreaded version (needs -pthread to compile)
+
+See our SAT'2010 papers for more details and COPYING for the license.
+
+Armin Biere, Juli 2013.
+----------------------------------------------------------------------
+
+Added an incremental fuzzer in cnfuzz_incr.c, based on cnfuzz.c
+
+It creates files in the following modified DIMACS format -- each line is either: 
+- a clause in the standard DIMACS format of the form "l1 l2 ... ln 0", or
+- a SAT query in the following format "s l1 l2 ... ln 0", where s is a reserved character and l1 ... ln are the assumptions for the current query
+
+Run make_fuzzers.csh to make both the original and the incremental fuzzer.
+
+Alexander Nadel, February 2025.
