@@ -6,6 +6,7 @@ if ($#argv < 2) then
     echo "- Every generated clause is verified using drat-trim."
     echo "- Every solution is verified using DiMoCheck."
     echo "Parameters: the command-line (i.e., <intel_sat_solver_static> <file> [Any additional parameters])"
+    echo "Example invocation: scripts/run_and_verify_intel_sat.csh intel_sat_solver_test_static regression_instances/regr_1.cnf"
     exit 140
 endif
 
