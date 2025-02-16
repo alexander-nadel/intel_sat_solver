@@ -1,10 +1,10 @@
 #! /bin/csh -f
 
 if ($#argv < 2) then
-    echo "This script run and verifies IntelSAT (that is, its executable, such as, intel_sat_solver_static). It returns 0 on success and other values on failure. If the command-line contains /topor_tool/print_ucore 1, it will also verify the unsatisfiable core. Features:"
-    echo "- Incremental instances in IntelSAT format (DIMACS + \"s assump1 ... assumpn 0\" lines) are supported, while still using the standard tools drat-trim and precochk for verification using a new methodology."
+    echo "This script run and verifies IntelSAT (that is, its executable, such as, intel_sat_solver_static). It returns 0 on success and other values on failure. Features:"
+    echo "- Incremental instances in IntelSAT format (DIMACS - p cnf + s assump1 ... assumpn 0) are supported, while still using the standard tools drat-trim and DiMoCheck for verification using a new methodology."
     echo "- Every generated clause is verified using drat-trim."
-    echo "- Every solution is verified using precochk."
+    echo "- Every solution is verified using DiMoCheck."
     echo "Parameters: the command-line (i.e., <intel_sat_solver_static> <file> [Any additional parameters])"
     exit 140
 endif
