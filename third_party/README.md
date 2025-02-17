@@ -1,14 +1,31 @@
-This directory contains third-party and derived tools used for veryfing IntelSAT, including:
+# Third-Party and Derived Tools for IntelSAT Verification
 
-1) drat-trim (unmodified; see https://github.com/marijnheule/drat-trim)
+This directory contains third-party and derived tools used for verifying IntelSAT, including:
 
-	Nathan Wetzler, Marijn J.H. Heule and Warren A. Hunt (2014). DRAT-trim: Efficient Checking and Trimming Using Expressive Clausal Proofs. In Theory and Applications of Satisfiability Testing - SAT 2014. Lecture Notes in Computer Science 8561, pp. 422-429, Springer.
+### drat-trim  
+(Unmodified; see [drat-trim repository](https://github.com/marijnheule/drat-trim))  
 
-	Marijn Heule, Warren A. Hunt Jr., and Nathan Wetzler (2013) Trimming while checking clausal proofs. FMCAD 2013: 181-188.
+**References:**  
+- Nathan Wetzler, Marijn J.H. Heule, and Warren A. Hunt (2014).  
+  *DRAT-trim: Efficient Checking and Trimming Using Expressive Clausal Proofs.*  
+  In *Theory and Applications of Satisfiability Testing - SAT 2014*.  
+  Lecture Notes in Computer Science 8561, pp. 422-429, Springer.  
 
-2) DiMoCheck (unmodified; see https://github.com/arminbiere/dimocheck)
+- Marijn Heule, Warren A. Hunt Jr., and Nathan Wetzler (2013).  
+  *Trimming while checking clausal proofs.*  
+  *FMCAD 2013*: 181-188.  
 
+---
 
-3) cnfuzzdd2013 (updated by us to fuzz incrementally)
+### DiMoCheck  
+(Unmodified; see [DiMoCheck repository](https://github.com/arminbiere/dimocheck))  
 
-	Robert Brummayer, Florian Lonsing, Armin Biere (2010): Automated Testing and Debugging of SAT and QBF Solvers. SAT 2010: 44-57
+---
+
+### cnfuzzdd2013  
+(Updated by us to fuzz incrementally)  
+
+**Reference:**  
+- Robert Brummayer, Florian Lonsing, and Armin Biere (2010).  
+  *Automated Testing and Debugging of SAT and QBF Solvers.*  
+  *SAT 2010*: 44-57.  
