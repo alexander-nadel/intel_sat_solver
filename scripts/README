@@ -1,15 +1,10 @@
-This directory contains scripts for testing, fuzzing and delta-debugging IntelSAT.
+This directory contains scripts for testing, fuzzing, and delta-debugging IntelSAT.
 
-Here is a brief description of each script's purpose and functionality. Run the respective script without parameters to get further help.
+Below is a brief description of each script’s purpose and functionality. Run the respective script without parameters to get further help.
 
-run_and_verify_intel_sat.csh: Run and verify IntelSAT on a given instance (including incremental instances). Every generated clause and the solution (if any) are verified. 
-
-run_and_verify_intel_sat_on_regression.csh: Run and verify IntelSAT on the regression in regression_instances
-
-delta_debug_intel_sat.csh: Delta-debug IntelSAT in case of a failure (that is, find a small instance, where there is still failure)
-
-delta_debug_intel_sat_till_fixed_point.csh: Run delta_debug_intel_sat.csh iteratively till fixed point
-
-fuzz_and_verify.csh: Fuzz incremental instances and verify IntelSAT
-
-fuzz_and_verify_parallel.csh: Fuzz incremental instances and verify IntelSAT in parallel
+- **run_and_verify_intel_sat.csh**: Runs and verifies IntelSAT on a given instance (including incremental instances). Every generated clause and the solution (if any) are verified.  
+- **run_and_verify_intel_sat_on_regression.csh**: Runs and verifies IntelSAT on the regression instances in `regression_instances`.  
+- **delta_debug_intel_sat.csh**: Delta-debug IntelSAT in case of a failure (i.e., find a small instance where the failure still occurs).  
+- **delta_debug_intel_sat_till_fixed_point.csh**: Runs `delta_debug_intel_sat.csh` iteratively until a fixed point is reached.  
+- **fuzz_and_verify.csh**: Fuzzes incremental instances and verifies IntelSAT.  
+- **fuzz_and_verify_parallel.csh**: Fuzzes incremental instances and verifies IntelSAT in parallel.  
