@@ -18,12 +18,12 @@ Compilation requires g++ version 10.1.0 or higher.
 
 ## Scripts
 
-The `scripts` directory contains useful scripts for verification, fuzzing, and delta-debugging of IntelSAT. Please refer to `scripts/README` for further details.
+The `scripts` directory contains useful scripts for verification, fuzzing, and delta-debugging of IntelSAT. Please refer to `scripts/README.md` for further details.
 
 ## Third-Party Tools
 
 The `third_party` directory includes third-party tools used by the validation scripts mentioned above. For more details, see:
-- `third_party/README`
+- `third_party/README.md`
 - `third_party/LICENSE`
 
 ## Citation
