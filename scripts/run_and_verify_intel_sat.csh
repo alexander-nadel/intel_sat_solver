@@ -2,7 +2,7 @@
 
 if ($#argv < 2) then
     echo "This script run and verifies IntelSAT (that is, its executable, such as, intel_sat_solver_static). It returns 0 on success and other values on failure. Features:"
-    echo "- Incremental instances in IntelSAT format (DIMACS - p cnf + s assump1 ... assumpn 0) are supported, while still using the standard tools drat-trim and DiMoCheck for verification using a new methodology."
+    echo "- Incremental instances in IntelSAT format (DIMACS - p cnf + s assump1 ... assumpn 0) are supported, while still taking advantage of the standard tools drat-trim and DiMoCheck for verification (with a new dedicated flow on top of them in the script)."
     echo "- Every generated clause is verified using drat-trim."
     echo "- Every solution is verified using DiMoCheck."
     echo "Parameters: the command-line (i.e., <intel_sat_solver_static> <file> [Any additional parameters])"
