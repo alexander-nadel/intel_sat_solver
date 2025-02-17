@@ -3,7 +3,7 @@
 This directory contains third-party and derived tools used for verifying IntelSAT, including:
 
 ### drat-trim  
-(Unmodified; see [drat-trim repository](https://github.com/marijnheule/drat-trim))  
+(executable only; unmodified; see [drat-trim repository](https://github.com/marijnheule/drat-trim))  
 
 **References:**  
 - Nathan Wetzler, Marijn J.H. Heule, and Warren A. Hunt (2014).  
@@ -18,12 +18,12 @@ This directory contains third-party and derived tools used for verifying IntelSA
 ---
 
 ### DiMoCheck  
-(Unmodified; see [DiMoCheck repository](https://github.com/arminbiere/dimocheck))  
+(executable only; unmodified; see [DiMoCheck repository](https://github.com/arminbiere/dimocheck))  
 
 ---
 
 ### cnfuzzdd2013  
-(Updated by us to fuzz incrementally)  
+(source and executable; updated by us to fuzz incrementally)  
 
 **Reference:**  
 - Robert Brummayer, Florian Lonsing, and Armin Biere (2010).  
