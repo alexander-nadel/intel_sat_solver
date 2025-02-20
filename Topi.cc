@@ -376,7 +376,7 @@ void CTopi<TLit, TUInd, Compress>::DumpSpan(const span<TLit> c, const string& pr
 template <typename TLit, typename TUInd, bool Compress>
 void CTopi<TLit, TUInd, Compress>::AddUserClause(const span<TLit> c)
 {
-	if (m_DumpFile) DumpSpan(c, "", " 0");
+	if (m_DumpFile && !m_ParamDontDumpClauses) DumpSpan(c, "", " 0");
 
 	AssumpUnsatCoreCleanUpIfRequired();
 
@@ -1241,8 +1241,27 @@ TToporReturnVal CTopi<TLit, TUInd, Compress>::Solve(const span<TLit> userAssumps
 		// The earliest falsified assumption might be assigned&satisfied in the corner case of a reimplication in BCP
 		if (!contradictionInfo.IsContradiction() && (m_EarliestFalsifiedAssump == BadULit || !IsFalsified(m_EarliestFalsifiedAssump)) && m_DecLevel < m_DecLevelOfLastAssignedAssumption)
 		{
-			m_EarliestFalsifiedAssump = BadULit;
-			HandleAssumptionsIfBacktrackedBeyondThem();
+			assert(NV(2) || P("The earliest falsified assumption is assigned&satisfied (corner case of a reimplication in BCP). The trail: " + STrail() + "\n"));
+			m_EarliestFalsifiedAssump = m_FlippedLit = BadULit;
+			// Trying to find a replacement (otherwise there would be a correctness bug)
+			for (TULit l : m_Assumps.get_const_span_cap())
+			{
+				auto v = GetVar(l);
+				assert(m_AssignmentInfo[v].m_IsAssump);
+				if (IsAssigned(l) && IsAssumpFalsifiedGivenVar(v) &&
+					(m_EarliestFalsifiedAssump == BadULit || GetAssignedDecLevel(l) <= GetAssignedDecLevel(m_EarliestFalsifiedAssump)))
+				{
+					m_LatestEarliestFalsifiedAssump = m_EarliestFalsifiedAssump = l;
+					m_LatestEarliestFalsifiedAssumpSolveInv = m_Stat.m_SolveInvs;
+					assert(NV(2) || P("Found a new earliest latest earliest falsified assumption: " + SLit(l)));
+				}
+			}
+
+			if (m_EarliestFalsifiedAssump == BadULit)
+			{
+				HandleAssumptionsIfBacktrackedBeyondThem();
+				m_DecLevelOfLastAssignedAssumption = m_Assumps.cap() == 0 ? 0 : GetDecLevel0ForUnassigned(*GetLitsHighestDecLevel0ForUnassignedIt(m_Assumps.get_span_cap(), 0));
+			}
 		}
 
 		if (unlikely(IsUnrecoverable())) return trv = StatusToRetVal();

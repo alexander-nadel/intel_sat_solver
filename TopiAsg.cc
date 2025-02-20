@@ -208,7 +208,7 @@ void CTopi<TLit,TUInd,Compress>::BoostScore(TLit vExternal, double value)
 	
 	const TULit l = E2I(vExternal);
 	const TUVar v = GetVar(l);
-	UpdateScoreVar(v, value);
+	UpdateScoreVar(v, m_ParamIfExternalBoostScoreValueOverride ? m_ParamExternalBoostScoreValueOverride : value);
 }
 
 template <typename TLit, typename TUInd, bool Compress>

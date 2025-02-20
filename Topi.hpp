@@ -212,6 +212,8 @@ namespace Topor
 		CTopiParam<uint8_t> m_ParamInitPolarityStrat = { m_Params, "/decision/polarity/init_strategy", "The initial polarity for a new variable: 0: negative; 1: positive; 2: random",  {1, 1, 1, 1, 1, 2, 1, 1, 1}, 0, 2 };
 		CTopiParam<uint8_t> m_ParamPolarityStrat = { m_Params, "/decision/polarity/strategy", "How to set the polarity for a non-forced variable: 0: phase saving; 1: random", 0, 0, 1 };
 		CTopiParam<uint32_t> m_ParamPolarityFlipFactor = { m_Params, "/decision/polarity/flip_factor", "If non-0, every N's polarity selection will be flipped", 0};
+		CTopiParam<bool> m_ParamIfExternalBoostScoreValueOverride = { m_Params, "/decision/polarity/if_external_boost_score_value_override", "Override the boost value by when BoostScore is invoked by the user?", false };
+		CTopiParam<double> m_ParamExternalBoostScoreValueOverride = { m_Params, "/decision/polarity/external_boost_score_value_override", "If /decision/polarity/if_external_boost_score_value_override is on, the value by which to override the boost value by when BoostScore is invoked by the user", 1. };
 		CTopiParam<double> m_ParamVarActivityInc = { m_Params, "/decision/vsids/var_activity_inc", "Variable activity bumping factor's initial value: m_PosScore[v].m_Score += m_VarActivityInc is carried out for every variable visited during a conflict (hard-coded to 1.0 in Glucose-based solvers)", {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 1.0}, 0.0 };
 		CTopiParam<double> m_ParamVarActivityIncDecay = { m_Params, "/decision/vsids/var_activity_inc_decay", "After each conflict, the variable activity bumping factor is increased by multiplication by 1/m_ParamVarActivityIncDecay (the initial value is provided in the parameter):  m_ParamVarActivityInc *= (1 / m_ParamVarActivityIncDecay), where it's 0.8 in Glucose-based solvers and 0.95 in Minisat", {0.95, 0.8, 0.8, 0.8, 0.8, 0.925, 0.8, 0.95, 0.925}, numeric_limits<double>::epsilon(), 1.0 };
 		CTopiParam<bool> m_ParamVarActivityIncDecayReinitN = { m_Params, "/decision/vsids/var_activity_inc_decay_reinit_n", "Re-initialize /decision/vsids/var_activity_inc_decay before normal incremental Solve?", {true, false, false, false, false, false, false, true, false} };
@@ -276,6 +278,7 @@ namespace Topor
 		CTopiParam<uint32_t> m_ParamAssertConsistencyStartConf = { m_Params, "/debugging/assert_consistency_start_conf", "Debugging only; meaningful only if /debugging/assert_consistency=1: assert the consistency starting with the provided conflicts number", 0 };
 		CTopiParam<uint32_t> m_ParamPrintDebugModelInvocation = { m_Params, "/debugging/print_debug_model_invocation", "The number of solver invocation to print the model in debug-model format: intended to be used for internal Topor debugging", 0 };
 		CTopiParam<uint32_t> m_ParamVerifyDebugModelInvocation = { m_Params, "/debugging/verify_debug_model_invocation", "The number of solver invocation, when the debug-model is verified: intended to be used for internal Topor debugging", 0 };
+		CTopiParam<bool> m_ParamDontDumpClauses = { m_Params, "/debugging/dont_dump_clauses", "If dumping is enabled, clauses are not dumped, only directives", false };
 
 		// Parameters: assumptions handling
 		CTopiParam<bool> m_ParamAssumpsSimpAllowReorder = { m_Params, "/assumptions/allow_reorder", "Assumptions handling: allow reordering assumptions when filtering", true };
@@ -2286,6 +2289,12 @@ protected:
 			assert(IsAssigned(l));
 			return m_VarInfo[GetVar(l)].m_DecLevel;
 		}
+
+		inline TUV GetDecLevel0ForUnassigned(TULit l) const
+		{
+			return IsAssigned(l) ? m_VarInfo[GetVar(l)].m_DecLevel : 0;
+		}
+
 		inline TUV GetAssignedDecLevelVar(TUVar v) const
 		{
 			assert(IsAssignedVar(v));
@@ -2361,6 +2370,13 @@ protected:
 		inline auto GetAssignedLitsHighestDecLevelIt(TULitSpan lits, size_t startInd) const
 		{ 
 			return max_element(lits.begin() + startInd, lits.end(), [&](TULit l) { return GetAssignedDecLevel(l); });
+		}
+
+		// TULitSpan can be: (1) const span<TULit>, (2) TSpanTULit
+		template <class TULitSpan>
+		inline auto GetLitsHighestDecLevel0ForUnassignedIt(TULitSpan lits, size_t startInd) const
+		{
+			return max_element(lits.begin() + startInd, lits.end(), [&](TULit l) { return IsAssigned(l) ? GetAssignedDecLevel(l) : 0; });
 		}
 		
 		template <class TULitSpan>
