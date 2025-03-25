@@ -29,7 +29,7 @@ extern "C" void pclose(FILE * pipe);
 #endif
 #include "SetInScope.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #define popen _popen
 #define pclose _pclose
 #define fileno _fileno

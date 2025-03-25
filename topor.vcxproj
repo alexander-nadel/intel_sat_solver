@@ -28,22 +28,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -101,16 +101,32 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>SKIP_ZLIB;NOMINMAX;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <DisableSpecificWarnings>4660;4661</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>SKIP_ZLIB;NOMINMAX;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <DisableSpecificWarnings>4660;4661</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cc" />
     <ClCompile Include="Topi.cc" />
     <ClCompile Include="TopiAsg.cc" />
     <ClCompile Include="TopiBacktrack.cc" />
     <ClCompile Include="TopiBcp.cc" />
+    <ClCompile Include="TopiBitCompression.cc" />
     <ClCompile Include="TopiCompression.cc" />
     <ClCompile Include="TopiConflictAnalysis.cc" />
     <ClCompile Include="TopiDebugPrinting.cc" />
     <ClCompile Include="TopiDecision.cc" />
+    <ClCompile Include="TopiInprocess.cc" />
     <ClCompile Include="TopiRestart.cc" />
     <ClCompile Include="TopiWL.cc" />
     <ClCompile Include="Topor.cc" />
@@ -127,6 +143,7 @@
     <ClInclude Include="TopiGlobal.hpp" />
     <ClInclude Include="TopiHandleNewUserCls.hpp" />
     <ClInclude Include="TopiParams.hpp" />
+    <ClInclude Include="TopiStatistics.hpp" />
     <ClInclude Include="TopiVarScores.hpp" />
     <ClInclude Include="Topor.hpp" />
     <ClInclude Include="ToporDynArray.hpp" />

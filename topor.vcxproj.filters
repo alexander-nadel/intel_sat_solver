@@ -51,6 +51,12 @@
     <ClCompile Include="Topor.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TopiBitCompression.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TopiInprocess.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BasicMemoryUsage.h">
@@ -103,6 +109,9 @@
     </ClInclude>
     <ClInclude Include="ToporWinAverage.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TopiStatistics.hpp">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
